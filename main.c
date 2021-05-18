@@ -9,6 +9,8 @@
 #define VERTICE_COMPARTIDO_2 1
 #define VERTICE_OPUESTO 2
 
+/* por josé espina */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
