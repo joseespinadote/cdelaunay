@@ -54,5 +54,5 @@ float det(Mat matrix) {
 }
 
 float cofactor(int x, int y, float num) {
-	return pow(-1, (float)x + (float)y) * num;
+	return powf(-1, (float)x + (float)y) * num;
 }
