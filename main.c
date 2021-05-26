@@ -1,3 +1,12 @@
+/*
+to do :
+
+tarea 2
+encapsular intercambio diagonal
+propagar el intercambio de diag
+revisar robustez algoritmo
+*/
+
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS 1 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1 
@@ -5,9 +14,6 @@
 #define _CRT_NONSTDC_NO_DEPRECATE 1
 #pragma warning (disable: 6262)
 #pragma warning (disable: 6031)
-#define VERTICE_COMPARTIDO_1 0
-#define VERTICE_COMPARTIDO_2 1
-#define VERTICE_OPUESTO 2
 
 #include <stdio.h>
 #include <string.h>
@@ -15,10 +21,14 @@
 #include <math.h>
 #include "det.h"
 
-#define LARGO_MALLA 1024
-#define TAMANO_MALLA_X 10
-#define TAMANO_MALLA_Y 10
+#define MAX_VERTICES 1500000
+#define MAX_TRIANGLES 1500000
+#define TAMANO_MALLA_X 100
+#define TAMANO_MALLA_Y 100
 #define BUFFER_SIZE 64
+#define VERTICE_COMPARTIDO_1 0
+#define VERTICE_COMPARTIDO_2 1
+#define VERTICE_OPUESTO 2
 
 typedef struct Vertex {
 	float x, y;
@@ -42,10 +52,10 @@ void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, i
 
 void initMesh(Triangle* triangles, Vertex* vertices) {
 	int i, j;
-	for (i = 0; i < LARGO_MALLA + 2; i++) {
+	for (i = 0; i < MAX_VERTICES; i++) {
 		vertices[i] = (Vertex){-1, -1};
 	}
-	for (i = 0; i < LARGO_MALLA; i++) {
+	for (i = 0; i < MAX_TRIANGLES; i++) {
 		for (j = 0; j < 3; j++) {
 			triangles[i].vertices[j] = NULL;
 			triangles[i].next[j] = NULL;
@@ -88,6 +98,7 @@ void getDetsByTriangle(Triangle* triangle, float* dets, float x, float y) {
 	matrix.m[2] = triangle->vertices[0]->y - triangle->vertices[2]->y;
 	matrix.m[3] = y - triangle->vertices[2]->y;
 	dets[2] = det(matrix);
+	free(matrix.m);
 }
 
 int getVertexIdByVertex(Triangle* triangle, Vertex* vertex) {
@@ -116,6 +127,7 @@ int getThirdVertexId(Triangle* triangle, Vertex* vertex1, Vertex* vertex2) {
 }
 
 float circleTest(Triangle* triangle, float x, float y) {
+	float d;
 	Mat matrix;
 	matrix.m = malloc(16 * sizeof(float));
 	matrix.n = 4;
@@ -135,18 +147,28 @@ float circleTest(Triangle* triangle, float x, float y) {
 	matrix.m[13] = y;
 	matrix.m[14] = powf(x, 2) + powf(y, 2);
 	matrix.m[15] = 1;
-	return det(matrix);
+	d = det(matrix);
+	free(matrix.m);
+	return d;
 }
 
 float circleTestByVertex(Triangle* triangle, Vertex* vertice) {
 	return circleTest(triangle, vertice->x, vertice->y);
 }
-
+/*
+Intercambia diagonal entre triángulos A y B siempre que pase el test del círculo
+Avc1 = es el ínidce del primer vertice de la arista compartida de A con B
+Avc2 = es el ínidce del primer vertice de la arista compartida de A con B
+Aop = es el ínidce del vertice opuesto a la arista compartida de A con B
+Bvc1 = es el ínidce del primer vertice de la arista compartida de B con A
+Bvc2 = es el ínidce del primer vertice de la arista compartida de B con A
+Bop = es el ínidce del vertice opuesto a la arista compartida de B con A
+*/
 void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 	int Avc1, int Avc2, int Aop, int Bop) {
+	if (triangleA == NULL || triangleB == NULL) return;
 	/*
-	 - determinar los vertices compartidos y opuestos entre A y B, sin perder
-	dirección contrarreloj
+	esta función:
 	 - el triangulo A pasará a ser compuesto por Avc2/Bvc1, Aop y Bop
 	 - el triangulo B pasará a ser compuesto por Aop, Avc1/Bvc2 y Bop
 	 - se debe actualizar el vecindario :
@@ -158,41 +180,42 @@ void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 	  - el vecino asociado a Bvc2 será A
 	  - el vecino asociado, al vertice opuesto del vecino asociado a Aop, será A
 	  - el vecino asociado, al vertice opuesto del vecino asociado a Bop, será B
-	donde:
-		Avc1 = es el ínidce del primer vertice de la arista compartida de A con B
-		Avc2 = es el ínidce del primer vertice de la arista compartida de A con B
-		Aop = es el ínidce del vertice opuesto a la arista compartida de A con B
-		Bvc1 = es el ínidce del primer vertice de la arista compartida de B con A
-		Bvc2 = es el ínidce del primer vertice de la arista compartida de B con A
-		Bop = es el ínidce del vertice opuesto a la arista compartida de B con A
 	*/
 	int Bvc1, Bvc2, idVerticeVecinoLejano;
 	Bvc1 = getVertexIdByVertex(triangleB, triangleA->vertices[Avc2]);
 	Bvc2 = getVertexIdByVertex(triangleB, triangleA->vertices[Avc1]);
 	// se hace el test del círculo
-	if (circleTest(triangleA, triangleB->vertices[Bop]->x, triangleB->vertices[Bop]->y) > 0) {
+	if (circleTest(triangleA, triangleB->vertices[Bop]->x, triangleB->vertices[Bop]->y) > 0.001) {
 		// si el resultado es positivo, se hace el cambio de diagonal, que,
 		// practicamente, es cambiar los vértices Avc2 y Bvc1 de A y B respectivamente
 		triangleA->vertices[Avc1] = triangleB->vertices[Bop];
 		triangleB->vertices[Bvc1] = triangleA->vertices[Aop];
 		// ahora se debe actualizar el vecindario:
-		// Avc1 y Bvc1 se mantienen
-		// Bop, cambia
+		// triangleA->next[Avc1] y triangleB->next[Bvc1] se mantienen
 		triangleB->next[Bop] = triangleA->next[Avc2];
-		// el vecino lejano referenciado por Avc2, cambia
-		idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Avc2], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
-		triangleA->next[Avc2]->next[idVerticeVecinoLejano] = triangleB;
-		// Avc2, cambia
+		// el vecino lejano referenciado por Avc2, cambia (si existe)
+		if (triangleA->next[Avc2] != NULL) {
+			idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Avc2], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
+			triangleA->next[Avc2]->next[idVerticeVecinoLejano] = triangleB;
+		}
 		triangleA->next[Avc2] = triangleB;
-		// Aop, cambia
 		triangleA->next[Aop] = triangleB->next[Bvc2];
 		// el vecino lejano referenciado por Bvc2, cambia (si es que existe)
 		if (triangleB->next[Bvc2] != NULL) {
 			idVerticeVecinoLejano = getThirdVertexId(triangleB->next[Bvc2], triangleA->vertices[Avc2], triangleA->vertices[Avc1]);
 			triangleB->next[Bvc2]->next[idVerticeVecinoLejano] = triangleA;
 		}
-		// Bvc2, cambia
 		triangleB->next[Bvc2] = triangleA;
+
+		// se propaga el intercambio de diags
+		if (triangleA->next[Aop] != NULL) {
+			idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]);
+			intercambioDeDiagonal(triangleA, triangleA->next[Aop], Avc1, Avc2, Aop, idVerticeVecinoLejano);
+		}
+		if (triangleB->next[Bop] != NULL) {
+			idVerticeVecinoLejano = getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
+			intercambioDeDiagonal(triangleB, triangleB->next[Bop], Bvc1, Bvc2, Bop, idVerticeVecinoLejano);
+		}
 	}
 }
 
@@ -230,10 +253,14 @@ void clearTriangle(Triangle *triangle) {
 	triangle->vertices[2] = NULL;
 }
 
+void generateDelaunayNet(char* strFileInput, char* strFileOutput) {
+
+}
+
 int main(int argc, char* argv[]) {
 	FILE* fpInput;
 	char fileInput[BUFFER_SIZE], fileOutput[BUFFER_SIZE];
-	int i,
+	int i, j,
 		// idsVerticesTriangulo es un vector con los vertices ordenados contrarreloj
 		// que se crea en función de la arista donde cae el nuevo punto
 		idsVerticesTriangulo[3],
@@ -248,16 +275,21 @@ int main(int argc, char* argv[]) {
 		numTotalTriangles = 2, numTotalVertices = 4,
 		// se usa como buleano para determinar si el punto cae en borde o dentro de un
 		// triángulo
-		puntoEnBorde;
+		puntoEnBorde,
+		// se usa como buleano para determinar si el punto ya existe en la malla
+		puntoExiste;
 	float x, y, dets[3];
-	Triangle triangles[LARGO_MALLA], copyTriangle, copyNext;
-	Vertex vertices[LARGO_MALLA + 2];
-
+	Triangle* triangles, copyTriangle, copyNext;
+	Vertex* vertices;
 	strcpy(fileInput, argv[1]);
 	strcpy(fileOutput, argv[2]);
-
+	triangles = malloc(sizeof(Triangle) * MAX_TRIANGLES);
+	vertices = malloc(sizeof(Vertex) * MAX_VERTICES);
+	if (triangles == NULL || vertices == NULL) {
+		printf("Error malloc\n");
+		exit(0);
+	}
 	initMesh(triangles, vertices);
-
 	fpInput = fopen(fileInput, "r");
 	if (!fpInput) {
 		printf("No pude abrir el archivo puntos.txt\n");
@@ -265,6 +297,14 @@ int main(int argc, char* argv[]) {
 	}
 	while (!feof(fpInput)) {
 		fscanf(fpInput, "%f %f", &x, &y);
+		// se chequea si el punto ya existe
+		puntoExiste = 0;
+		for (j = 0; j < numTotalVertices;j++) {
+			if (vertices[j].x == x && vertices[j].y == y) {
+				puntoExiste = 1;
+			}
+		}
+		if (puntoExiste == 1) continue;
 		// se buscará el triangulo t en cada triangulo[i] de la malla
 		for (i = 0; i < numTotalTriangles; i++) {
 			// se calcula los determinantes de cada lado del triangulo t su el nuevo punto
@@ -351,11 +391,6 @@ int main(int argc, char* argv[]) {
 						copyTriangle.vertices[2]);
 					// se actualiza la referencia del vecino respecto a nuevo triángulo n2
 					copyTriangle.next[0]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 2];
-					// se realiza procedimiento del intercambio de diagonal, incluyendo el test del círculo
-					intercambioDeDiagonal(
-						&triangles[numTotalTriangles - 2],
-						copyTriangle.next[0], 1, 2, 0,
-						idVerticeOpuestoVecino);
 				}
 				// ¿tenia vecino V2 el difunto t frente al vertice 2? (o frente a n3)
 				if (copyTriangle.next[1] != NULL) {
@@ -364,11 +399,6 @@ int main(int argc, char* argv[]) {
 						copyTriangle.vertices[2],
 						copyTriangle.vertices[0]);
 					copyTriangle.next[1]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
-					// se hace test del círculo e intercambio de diagonal
-					intercambioDeDiagonal(
-						&triangles[numTotalTriangles - 1],
-						copyTriangle.next[1], 2, 0, 1,
-						idVerticeOpuestoVecino);
 				}
 				// ¿tenia vecino V3 el difunto t frente al vertice 3? (o frente a n1)
 				if (copyTriangle.next[2] != NULL) {
@@ -379,6 +409,33 @@ int main(int argc, char* argv[]) {
 						copyTriangle.vertices[1]);
 					// se actualiza referencia del vértice opuesto a la arista compartida en el vecino lejano V3
 					copyTriangle.next[2]->next[idVerticeOpuestoVecino] = &triangles[i];
+				}
+				if (copyTriangle.next[0] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						copyTriangle.next[0],
+						copyTriangle.vertices[1],
+						copyTriangle.vertices[2]);
+					intercambioDeDiagonal(
+						&triangles[numTotalTriangles - 2],
+						copyTriangle.next[0], 1, 2, 0,
+						idVerticeOpuestoVecino);
+				}
+				if (copyTriangle.next[1] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						copyTriangle.next[1],
+						copyTriangle.vertices[2],
+						copyTriangle.vertices[0]);
+					intercambioDeDiagonal(
+						&triangles[numTotalTriangles - 1],
+						copyTriangle.next[1], 2, 0, 1,
+						idVerticeOpuestoVecino);
+				}
+				if (copyTriangle.next[2] != NULL) {
+					// idsVerticesVecino[0] es ahora vértice opuesto a la arista compartida entre n1 y V3
+					idVerticeOpuestoVecino = getThirdVertexId(
+						copyTriangle.next[2],
+						copyTriangle.vertices[0],
+						copyTriangle.vertices[1]);
 					intercambioDeDiagonal(
 						&triangles[i],
 						copyTriangle.next[2], 0, 1, 2,
@@ -479,6 +536,8 @@ int main(int argc, char* argv[]) {
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2]);
 						copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
 					}
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[1] = &triangles[numTotalTriangles - 1];
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[2] = &triangles[i];
 					// vecindad de n4
 					triangles[numTotalTriangles - 1].next[0] = copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]];
 					// de existir, se actualiza el ex vecino de copyNext
@@ -563,7 +622,7 @@ int main(int argc, char* argv[]) {
 							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
 						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = &triangles[i];
 					}
-					// triangles[i].next[2] seria borde no?
+					triangles[i].next[2] = NULL;
 					// se actualiza vertice 1 de n2
 					triangles[numTotalTriangles - 1].next[0] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
 					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
@@ -575,7 +634,7 @@ int main(int argc, char* argv[]) {
 					}
 					// n1 pasa a ser vecino de n2 en el vértice 2
 					triangles[numTotalTriangles - 1].next[1] = &triangles[i];
-					// triangles[numTotalTriangles - 1].next[2] seria borde?
+					triangles[numTotalTriangles - 1].next[2] = NULL;
 					// intercambio de diagonal para n1, si es que tiene vecino al frente de su vertice 2
 					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
 						idVerticeOpuestoVecino = getThirdVertexId(
@@ -603,6 +662,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
+	fclose(fpInput);
 	exportData(triangles, numTotalTriangles, "salida.txt");
 	return 0;
 }

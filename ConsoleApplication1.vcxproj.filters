@@ -32,5 +32,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
+    <None Include="plot.bat">
+      <Filter>Archivos de origen</Filter>
+    </None>
+    <None Include="script.gnuplot" />
   </ItemGroup>
 </Project>
