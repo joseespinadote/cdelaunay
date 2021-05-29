@@ -24,6 +24,8 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="puntos.txt" />
+    <Text Include="puntosR.txt" />
+    <Text Include="salida.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="det.h">

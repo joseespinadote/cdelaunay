@@ -1,10 +1,9 @@
 /*
 to do :
 
-tarea 2
-encapsular intercambio diagonal
 propagar el intercambio de diag
-revisar robustez algoritmo
+encapsular codigos
+realizar cambios de diagonal en el nuevo punto
 */
 
 #pragma once
@@ -23,12 +22,14 @@ revisar robustez algoritmo
 
 #define MAX_VERTICES 1500000
 #define MAX_TRIANGLES 1500000
+#define MAX_SEGMENTS 1000
 #define TAMANO_MALLA_X 100
 #define TAMANO_MALLA_Y 100
 #define BUFFER_SIZE 64
 #define VERTICE_COMPARTIDO_1 0
 #define VERTICE_COMPARTIDO_2 1
 #define VERTICE_OPUESTO 2
+#define EPSILON 0.001
 
 typedef struct Vertex {
 	float x, y;
@@ -39,7 +40,11 @@ typedef struct Triangle {
 	struct Triangle* next[3];
 } Triangle;
 
-void initMesh(Triangle* triangles, Vertex* vertices);
+typedef struct Segment {
+	Vertex v1, v2;
+} Segment;
+
+void initMesh(Triangle* triangles, Vertex* vertices, Segment* constraints);
 void getDetsByTriangle(Triangle* triangle, float* dets, float x, float y);
 int getVertexIdByVertex(Triangle* triangle, Vertex* vertex);
 Vertex* getThirdVertex(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
@@ -47,10 +52,14 @@ int getThirdVertexId(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
 float circleTest(Triangle* triangle, float x, float y);
 float circleTestByVertex(Triangle* triangle, Vertex* vertice);
 void exportData(Triangle* triangles, int numTotalTriangles, char* fileOutput);
+void exportDataRestricted(Segment* constraints, int numTotalSegments, char* fileOutput);
 void clearTriangle(Triangle* triangle);
-void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop);
+void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest);
+int generateDelaunayNet(char* strFileInput, Triangle* triangles, Vertex* vertices);
+float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp);
+int restrictDelaunayNet(char* strFileInput, Triangle* triangles, int numTotalTriangles, Segment* constraints);
 
-void initMesh(Triangle* triangles, Vertex* vertices) {
+void initMesh(Triangle* triangles, Vertex* vertices, Segment* constraints) {
 	int i, j;
 	for (i = 0; i < MAX_VERTICES; i++) {
 		vertices[i] = (Vertex){-1, -1};
@@ -60,6 +69,9 @@ void initMesh(Triangle* triangles, Vertex* vertices) {
 			triangles[i].vertices[j] = NULL;
 			triangles[i].next[j] = NULL;
 		}
+	}
+	for (i = 0; i < MAX_SEGMENTS; i++) {
+		constraints[i] = (Segment){ (Vertex) { -1, -1 }, (Vertex) { -1, -1 } };
 	}
 	vertices[0].x = 0;
 	vertices[0].y = TAMANO_MALLA_Y;
@@ -165,7 +177,7 @@ Bvc2 = es el ínidce del primer vertice de la arista compartida de B con A
 Bop = es el ínidce del vertice opuesto a la arista compartida de B con A
 */
 void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
-	int Avc1, int Avc2, int Aop, int Bop) {
+	int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest) {
 	if (triangleA == NULL || triangleB == NULL) return;
 	/*
 	esta función:
@@ -185,7 +197,9 @@ void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 	Bvc1 = getVertexIdByVertex(triangleB, triangleA->vertices[Avc2]);
 	Bvc2 = getVertexIdByVertex(triangleB, triangleA->vertices[Avc1]);
 	// se hace el test del círculo
-	if (circleTest(triangleA, triangleB->vertices[Bop]->x, triangleB->vertices[Bop]->y) > 0.001) {
+	if (skipCircleTest == 1 ||
+		(circleTest(triangleA, triangleB->vertices[Bop]->x, triangleB->vertices[Bop]->y) > EPSILON)
+		) {
 		// si el resultado es positivo, se hace el cambio de diagonal, que,
 		// practicamente, es cambiar los vértices Avc2 y Bvc1 de A y B respectivamente
 		triangleA->vertices[Avc1] = triangleB->vertices[Bop];
@@ -210,11 +224,11 @@ void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 		// se propaga el intercambio de diags
 		if (triangleA->next[Aop] != NULL) {
 			idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]);
-			intercambioDeDiagonal(triangleA, triangleA->next[Aop], Avc1, Avc2, Aop, idVerticeVecinoLejano);
+			intercambioDeDiagonal(triangleA, triangleA->next[Aop], Avc1, Avc2, Aop, idVerticeVecinoLejano, 0);
 		}
 		if (triangleB->next[Bop] != NULL) {
 			idVerticeVecinoLejano = getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
-			intercambioDeDiagonal(triangleB, triangleB->next[Bop], Bvc1, Bvc2, Bop, idVerticeVecinoLejano);
+			intercambioDeDiagonal(triangleB, triangleB->next[Bop], Bvc1, Bvc2, Bop, idVerticeVecinoLejano, 0);
 		}
 	}
 }
@@ -241,6 +255,24 @@ void exportData(Triangle *triangles, int numTotalTriangles, char *fileOutput) {
 			triangles[i].vertices[0]->y
 		);
 	}
+	fprintf(fpOutput, "\n");
+	fclose(fpOutput);
+}
+
+void exportDataRestricted(Segment* constraints, int numTotalSegments, char* fileOutput) {
+	FILE* fpOutput;
+	int i;
+	fpOutput = fopen(fileOutput, "a");
+	for (i = 0; i < numTotalSegments; i++) {
+		fprintf(fpOutput, "%f %f\n",
+			constraints[i].v1.x,
+			constraints[i].v1.y
+		);
+		fprintf(fpOutput, "%f %f\n\n",
+			constraints[i].v2.x,
+			constraints[i].v2.y
+		);
+	}
 	fclose(fpOutput);
 }
 
@@ -253,13 +285,24 @@ void clearTriangle(Triangle *triangle) {
 	triangle->vertices[2] = NULL;
 }
 
-void generateDelaunayNet(char* strFileInput, char* strFileOutput) {
-
+/*
+test orientacion entre segmento ((x1, y1),(x2, y2)) y un punto (xp, yp)
+*/
+float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp) {
+	Mat matrix;
+	float d;
+	matrix.m = malloc(4 * sizeof(float));
+	matrix.n = 2;
+	matrix.m[0] = x2 - x1;
+	matrix.m[1] = xp - x1;
+	matrix.m[2] = y2 - y1;
+	matrix.m[3] = yp - y1;
+	d = det(matrix);
+	return d;
 }
 
-int main(int argc, char* argv[]) {
+int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertices) {
 	FILE* fpInput;
-	char fileInput[BUFFER_SIZE], fileOutput[BUFFER_SIZE];
 	int i, j,
 		// idsVerticesTriangulo es un vector con los vertices ordenados contrarreloj
 		// que se crea en función de la arista donde cae el nuevo punto
@@ -278,21 +321,14 @@ int main(int argc, char* argv[]) {
 		puntoEnBorde,
 		// se usa como buleano para determinar si el punto ya existe en la malla
 		puntoExiste;
+	// x e y son las coordenadas de los nuevos puntos leido una linea a la vez
 	float x, y, dets[3];
-	Triangle* triangles, copyTriangle, copyNext;
-	Vertex* vertices;
-	strcpy(fileInput, argv[1]);
-	strcpy(fileOutput, argv[2]);
-	triangles = malloc(sizeof(Triangle) * MAX_TRIANGLES);
-	vertices = malloc(sizeof(Vertex) * MAX_VERTICES);
-	if (triangles == NULL || vertices == NULL) {
-		printf("Error malloc\n");
-		exit(0);
-	}
-	initMesh(triangles, vertices);
-	fpInput = fopen(fileInput, "r");
+	// Copia de triangulos de apoyo para no perder referencias originales al momento de modificar la malla
+	Triangle copyTriangle, copyNext;
+
+	fpInput = fopen(strFileInput, "r");
 	if (!fpInput) {
-		printf("No pude abrir el archivo puntos.txt\n");
+		printf("No pude abrir el archivo puntos\n");
 		return 1;
 	}
 	while (!feof(fpInput)) {
@@ -341,7 +377,7 @@ int main(int argc, char* argv[]) {
 				 - Se deben configurar la nueva vecindad dado n1, n2 y n3
 				 - Los ex vecinos del difunto t, deben actualizarse respecto a n1, n2 y n3
 				 - Se debe hacer el test del círculo entre:
-				    - n1 y V3, donde V3 es el vecino opuesto al vértice 3 de t
+					- n1 y V3, donde V3 es el vecino opuesto al vértice 3 de t
 					- n2 y V1, donde V1 es el vecino opuesto al vértice 1 de t
 					- n3 y V2, donde V2 es el vecino opuesto al vértice 2 de t
 				*/
@@ -418,7 +454,7 @@ int main(int argc, char* argv[]) {
 					intercambioDeDiagonal(
 						&triangles[numTotalTriangles - 2],
 						copyTriangle.next[0], 1, 2, 0,
-						idVerticeOpuestoVecino);
+						idVerticeOpuestoVecino, 0);
 				}
 				if (copyTriangle.next[1] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
@@ -428,7 +464,7 @@ int main(int argc, char* argv[]) {
 					intercambioDeDiagonal(
 						&triangles[numTotalTriangles - 1],
 						copyTriangle.next[1], 2, 0, 1,
-						idVerticeOpuestoVecino);
+						idVerticeOpuestoVecino, 0);
 				}
 				if (copyTriangle.next[2] != NULL) {
 					// idsVerticesVecino[0] es ahora vértice opuesto a la arista compartida entre n1 y V3
@@ -439,7 +475,7 @@ int main(int argc, char* argv[]) {
 					intercambioDeDiagonal(
 						&triangles[i],
 						copyTriangle.next[2], 0, 1, 2,
-						idVerticeOpuestoVecino);
+						idVerticeOpuestoVecino, 0);
 				}
 				numTotalVertices++;
 				break;
@@ -562,7 +598,7 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							&triangles[i],
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]], 2, 0, 1,
-							idVerticeOpuestoVecino);
+							idVerticeOpuestoVecino, 0);
 					}
 					// n2
 					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
@@ -573,7 +609,7 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							&triangles[numTotalTriangles - 2],
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino);
+							idVerticeOpuestoVecino, 0);
 					}
 					// n3
 					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]] != NULL) {
@@ -584,8 +620,8 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]],
 							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino);
-					}	
+							idVerticeOpuestoVecino, 0);
+					}
 					// n4
 					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]] != NULL) {
 						idVerticeOpuestoVecino = getThirdVertexId(
@@ -595,7 +631,7 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							&triangles[numTotalTriangles - 1],
 							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]], 1, 2, 0,
-							idVerticeOpuestoVecino);
+							idVerticeOpuestoVecino, 0);
 					}
 				}
 				// en el caso que t no comparta la arista donde cayó el nuevo punto con otro trinagulo...
@@ -644,7 +680,7 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							&triangles[i],
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]], 2, 0, 1,
-							idVerticeOpuestoVecino);
+							idVerticeOpuestoVecino, 0);
 					}
 					// intercambio de diagonal para n2
 					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
@@ -655,7 +691,7 @@ int main(int argc, char* argv[]) {
 						intercambioDeDiagonal(
 							&triangles[numTotalTriangles - 1],
 							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino);
+							idVerticeOpuestoVecino, 0);
 					}
 				}
 				numTotalVertices++;
@@ -663,6 +699,121 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	fclose(fpInput);
-	exportData(triangles, numTotalTriangles, "salida.txt");
+	return numTotalTriangles;
+}
+
+int restrictDelaunayNet(char* strFileInput, Triangle* triangles, int numTotalTriangles, Segment* constraints) {
+	FILE* fpInput;
+	int i, j,
+		// idsVerticesTriangulo es un vector con los vertices ordenados contrarreloj
+		// que se crea en función de la arista donde cae el nuevo punto
+		idsVerticesTriangulo[3],
+		// idVerticeOpuestoVecino es el id del vértice opuesto del vecino que no comparte
+		// con alguno de los nuevos triángulos n1, n2 o n3. Sirve para hacer test del
+		// círculo
+		idVerticeOpuestoVecino,
+		// similar a idsVerticesTriangulo, pero del vecino con el que comparte arista en caso
+		// de que el punto cae en arista compartida entre 2 triángulos
+		idsVerticesVecino[3] = { -1,-1,-1 },
+		// valores iniciales de contadores de trinagulos y vértcies totales en la malla
+		numTotalSegments = 0,
+		// se usa como buleano para determinar si el punto cae en borde o dentro de un
+		// triángulo
+		constraintFound;
+	// xs e ys es la recta a restringir
+	float x1, y1, x2, y2, detsA[3], detsB[3];
+	Triangle copyTriangle, copyNext;
+
+	fpInput = fopen(strFileInput, "r");
+	if (!fpInput) {
+		printf("No pude abrir el archivo de puntos restringidos\n");
+		return 1;
+	}
+	while (!feof(fpInput)) {
+		fscanf(fpInput, "%f %f %f %f", &x1, &y1, &x2, &y2);
+		constraints[numTotalSegments].v1.x = x1;
+		constraints[numTotalSegments].v1.y = y1;
+		constraints[numTotalSegments].v2.x = x2;
+		constraints[numTotalSegments].v2.y = y2;
+		numTotalSegments++;
+		/*
+		puntoExiste = 0;
+		for (j = 0; j < numTotalSegments; j++) {
+			if (constraints[j].v1.x == x1 &&
+				constraints[j].v1.y == y1 &&
+				constraints[j].v2.x == x2 &&
+				constraints[j].v2.y == y2) {
+				puntoExiste = 1;
+			}
+		}
+		if (puntoExiste == 1) continue;
+		*/
+		/* se busca el triangulo donde parte del segmento restringido */
+		for (i = 0; i < numTotalTriangles; i++) {
+			constraintFound = 0;
+			getDetsByTriangle(&triangles[i], detsA, x1, y1);
+			if (detsA[0] >= 0 && detsA[1] >= 0 && detsA[2] >= 0) {
+				getDetsByTriangle(&triangles[i], detsB, x2, y2);
+				if (detsA[0] > 0 && detsA[1] == 0 && detsA[2] == 0 && detsB[0] < 0 && detsB[1] > 0 && detsB[2] > 0) {
+					constraintFound = 1;
+					idsVerticesTriangulo[0] = 2;
+					idsVerticesTriangulo[1] = 0;
+					idsVerticesTriangulo[2] = 1;
+				}
+				else if (detsA[0] == 0 && detsA[1] == 0 && detsA[2] > 0 && detsB[0] > 0 && detsB[1] > 0 && detsB[2] < 0) {
+					constraintFound = 1;
+					idsVerticesTriangulo[0] = 1;
+					idsVerticesTriangulo[1] = 2;
+					idsVerticesTriangulo[2] = 0;
+				}
+				else if (detsA[0] == 0 && detsA[1] > 0 && detsA[2] == 0 && detsB[0] > 0 && detsB[1] < 0 && detsB[2] > 0) {
+					constraintFound = 1;
+					idsVerticesTriangulo[0] = 0;
+					idsVerticesTriangulo[1] = 1;
+					idsVerticesTriangulo[2] = 2;
+				}
+				if (constraintFound == 1) {
+					idVerticeOpuestoVecino = getThirdVertexId(triangles[i].next[idsVerticesTriangulo[0]], triangles[i].vertices[idsVerticesTriangulo[1]], triangles[i].vertices[idsVerticesTriangulo[2]]);
+					intercambioDeDiagonal(&triangles[i], triangles[i].next[idsVerticesTriangulo[0]],
+						idsVerticesTriangulo[1], idsVerticesTriangulo[2], idsVerticesTriangulo[0], idVerticeOpuestoVecino, 1);
+				}
+				/*
+				printf("%.2f,%.2f %.2f,%.2f %.2f,%.2f:\n",
+					triangles[i].vertices[0]->x, triangles[i].vertices[0]->y,
+					triangles[i].vertices[1]->x, triangles[i].vertices[1]->y,
+					triangles[i].vertices[2]->x, triangles[i].vertices[2]->y);
+				printf("%.2f %.2f %.2f, ", detsA[0], detsA[1], detsA[2]);
+				printf("%.2f %.2f %.2f\n\n", detsB[0], detsB[1], detsB[2]);
+				*/
+			}
+		}
+	}
+	fclose(fpInput);
+	return numTotalSegments;
+}
+
+int main(int argc, char* argv[]) {
+	int numTotalTriangles, numTotalSegments;
+	char fileInput[BUFFER_SIZE],
+		fileOutput[BUFFER_SIZE],
+		fileInputRestrict[BUFFER_SIZE];
+	Triangle* triangles;
+	Vertex* vertices;
+	Segment* constraints;
+	strcpy(fileInput, argv[1]);
+	strcpy(fileOutput, argv[2]);
+	strcpy(fileInputRestrict, argv[3]);
+	triangles = malloc(sizeof(Triangle) * MAX_TRIANGLES);
+	vertices = malloc(sizeof(Vertex) * MAX_VERTICES);
+	constraints = malloc(sizeof(Segment) * MAX_SEGMENTS);
+	if (triangles == NULL || vertices == NULL) {
+		printf("Error malloc\n");
+		exit(0);
+	}
+	initMesh(triangles, vertices, constraints);
+	numTotalTriangles = generateDelaunayNet(fileInput, triangles, vertices);
+	numTotalSegments = restrictDelaunayNet(fileInputRestrict, triangles, numTotalTriangles, constraints);
+	exportData(triangles, numTotalTriangles, fileOutput);
+	exportDataRestricted(constraints, numTotalSegments, fileOutput);
 	return 0;
 }
