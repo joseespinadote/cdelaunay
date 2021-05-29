@@ -301,9 +301,29 @@ float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float y
 	return d;
 }
 
+int getIdTriangleContainsPoint(Triangle* triangle, int *puntoEnBorde, float x, float y) {
+	float dets[3];
+	Triangle* currentTriangle = triangle;
+	while(1) {
+		getDetsByTriangle(currentTriangle, dets, x, y);
+		if (dets[0] >= 0 && dets[1] >= 0 && dets[2] >= 0) {
+			if (dets[0] == 0) puntoEnBorde = 0;
+			else if (dets[1] == 0) puntoEnBorde = 1;
+			else if (dets[2] == 0) puntoEnBorde = 2;
+			return currentTriangle;
+		}
+		if (dets[0] < 0) currentTriangle = currentTriangle->next[2];
+		else if (dets[1] < 0) currentTriangle = currentTriangle->next[0];
+		else if (dets[2] < 0) currentTriangle = currentTriangle->next[1];
+	}
+	return 0;
+}
+
 int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertices) {
 	FILE* fpInput;
 	int i, j,
+		// id del triángulo que contiene el nuevo punto
+		id,
 		// idsVerticesTriangulo es un vector con los vertices ordenados contrarreloj
 		// que se crea en función de la arista donde cae el nuevo punto
 		idsVerticesTriangulo[3],
@@ -333,7 +353,8 @@ int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertice
 	}
 	while (!feof(fpInput)) {
 		fscanf(fpInput, "%f %f", &x, &y);
-		// se chequea si el punto ya existe
+		// se chequea si el punto ya existe. En caso de existir, pasamos al siguiente
+		// si no se hace esto último, se producen errores
 		puntoExiste = 0;
 		for (j = 0; j < numTotalVertices;j++) {
 			if (vertices[j].x == x && vertices[j].y == y) {
@@ -341,6 +362,9 @@ int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertice
 			}
 		}
 		if (puntoExiste == 1) continue;
+		puntoEnBorde = -1;
+		id = getIdTriangleContainsPoint(&triangles[numTotalTriangles/2], &puntoEnBorde, x, y);
+		continue;
 		// se buscará el triangulo t en cada triangulo[i] de la malla
 		for (i = 0; i < numTotalTriangles; i++) {
 			// se calcula los determinantes de cada lado del triangulo t su el nuevo punto
