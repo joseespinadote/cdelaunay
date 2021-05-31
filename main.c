@@ -20,8 +20,8 @@ realizar cambios de diagonal en el nuevo punto
 #include <math.h>
 #include "det.h"
 
-#define MAX_VERTICES 1500000
-#define MAX_TRIANGLES 1500000
+#define MAX_VERTICES 3000
+#define MAX_TRIANGLES 3000
 #define MAX_SEGMENTS 1000
 #define TAMANO_MALLA_X 100
 #define TAMANO_MALLA_Y 100
@@ -54,10 +54,11 @@ float circleTestByVertex(Triangle* triangle, Vertex* vertice);
 void exportData(Triangle* triangles, int numTotalTriangles, char* fileOutput);
 void exportDataRestricted(Segment* constraints, int numTotalSegments, char* fileOutput);
 void clearTriangle(Triangle* triangle);
-void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest);
+int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest, int skipPropagation);
 int generateDelaunayNet(char* strFileInput, Triangle* triangles, Vertex* vertices);
 float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp);
 int restrictDelaunayNet(char* strFileInput, Triangle* triangles, int numTotalTriangles, Segment* constraints);
+Triangle* getIdTriangleContainsPoint(Triangle* triangle, int* puntoEnBorde, float x, float y);
 
 void initMesh(Triangle* triangles, Vertex* vertices, Segment* constraints) {
 	int i, j;
@@ -176,8 +177,8 @@ Bvc1 = es el ínidce del primer vertice de la arista compartida de B con A
 Bvc2 = es el ínidce del primer vertice de la arista compartida de B con A
 Bop = es el ínidce del vertice opuesto a la arista compartida de B con A
 */
-void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
-	int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest) {
+int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
+	int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest, int skipPropagation) {
 	if (triangleA == NULL || triangleB == NULL) return;
 	/*
 	esta función:
@@ -221,16 +222,76 @@ void intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 		}
 		triangleB->next[Bvc2] = triangleA;
 
-		// se propaga el intercambio de diags
-		if (triangleA->next[Aop] != NULL) {
-			idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]);
-			intercambioDeDiagonal(triangleA, triangleA->next[Aop], Avc1, Avc2, Aop, idVerticeVecinoLejano, 0);
+		if (skipPropagation == 0) {
+			// se propaga el intercambio de diags
+			if (triangleA->next[Aop] != NULL) {
+				idVerticeVecinoLejano = getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]);
+				if (intercambioDeDiagonal(triangleA, triangleA->next[Aop], Avc1, Avc2, Aop, idVerticeVecinoLejano, 0, 0) == 0) {
+					if (triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2])] != NULL) {
+						if (intercambioDeDiagonal(
+							triangleA->next[Aop],
+							triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2])],
+							getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1]),
+							getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]),
+							getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2]),
+							getThirdVertexId(
+								triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2])],
+								triangleA->next[Aop]->vertices[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1])],
+								triangleA->next[Aop]->vertices[getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2])]
+							), 0, 0) == 0) {
+							if (triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1])] != NULL) {
+								intercambioDeDiagonal(
+									triangleA->next[Aop],
+									triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1])],
+									getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2]),
+									getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2]),
+									getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1]),
+									getThirdVertexId(
+										triangleA->next[Aop]->next[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc1])],
+										triangleA->next[Aop]->vertices[getThirdVertexId(triangleA->next[Aop], triangleA->vertices[Avc1], triangleA->vertices[Avc2])],
+										triangleA->next[Aop]->vertices[getVertexIdByVertex(triangleA->next[Aop], triangleA->vertices[Avc2])]
+									), 0, 0);
+							}
+						}
+					}
+				}
+			}
+			if (triangleB->next[Bop] != NULL) {
+				idVerticeVecinoLejano = getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
+				if (intercambioDeDiagonal(triangleB, triangleB->next[Bop], Bvc1, Bvc2, Bop, idVerticeVecinoLejano, 0, 0) == 0) {
+					if (triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2])] != NULL) {
+						if (intercambioDeDiagonal(
+							triangleB->next[Bop],
+							triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2])],
+							getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1]),
+							getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]),
+							getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2]),
+							getThirdVertexId(
+								triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2])],
+								triangleB->next[Bop]->vertices[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1])],
+								triangleB->next[Bop]->vertices[getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2])]
+							), 0, 0) == 0) {
+							if (triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1])] != NULL) {
+								intercambioDeDiagonal(
+									triangleB->next[Bop],
+									triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1])],
+									getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]),
+									getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2]),
+									getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1]),
+									getThirdVertexId(
+										triangleB->next[Bop]->next[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc1])],
+										triangleB->next[Bop]->vertices[getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2])],
+										triangleB->next[Bop]->vertices[getVertexIdByVertex(triangleB->next[Bop], triangleB->vertices[Bvc2])]
+									), 0, 0);
+							}
+						}
+					}
+				}
+			}
 		}
-		if (triangleB->next[Bop] != NULL) {
-			idVerticeVecinoLejano = getThirdVertexId(triangleB->next[Bop], triangleB->vertices[Bvc1], triangleB->vertices[Bvc2]);
-			intercambioDeDiagonal(triangleB, triangleB->next[Bop], Bvc1, Bvc2, Bop, idVerticeVecinoLejano, 0);
-		}
+		return 1;
 	}
+	return 0;
 }
 
 void exportData(Triangle *triangles, int numTotalTriangles, char *fileOutput) {
@@ -301,22 +362,22 @@ float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float y
 	return d;
 }
 
-int getIdTriangleContainsPoint(Triangle* triangle, int *puntoEnBorde, float x, float y) {
+Triangle* getIdTriangleContainsPoint(Triangle* triangle, int *puntoEnBorde, float x, float y) {
 	float dets[3];
 	Triangle* currentTriangle = triangle;
+	*puntoEnBorde = 0;
 	while(1) {
 		getDetsByTriangle(currentTriangle, dets, x, y);
 		if (dets[0] >= 0 && dets[1] >= 0 && dets[2] >= 0) {
-			if (dets[0] == 0) puntoEnBorde = 0;
-			else if (dets[1] == 0) puntoEnBorde = 1;
-			else if (dets[2] == 0) puntoEnBorde = 2;
+			if (dets[0] == 0) *puntoEnBorde = 1;
+			else if (dets[1] == 0) *puntoEnBorde = 2;
+			else if (dets[2] == 0) *puntoEnBorde = 3;
 			return currentTriangle;
 		}
 		if (dets[0] < 0) currentTriangle = currentTriangle->next[2];
-		else if (dets[1] < 0) currentTriangle = currentTriangle->next[0];
 		else if (dets[2] < 0) currentTriangle = currentTriangle->next[1];
+		else if (dets[1] < 0) currentTriangle = currentTriangle->next[0];
 	}
-	return 0;
 }
 
 int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertices) {
@@ -344,7 +405,7 @@ int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertice
 	// x e y son las coordenadas de los nuevos puntos leido una linea a la vez
 	float x, y, dets[3];
 	// Copia de triangulos de apoyo para no perder referencias originales al momento de modificar la malla
-	Triangle copyTriangle, copyNext;
+	Triangle *currentTriangle, copyTriangle, copyNext;
 
 	fpInput = fopen(strFileInput, "r");
 	if (!fpInput) {
@@ -363,363 +424,364 @@ int generateDelaunayNet(char* strFileInput, Triangle *triangles, Vertex *vertice
 		}
 		if (puntoExiste == 1) continue;
 		puntoEnBorde = -1;
-		id = getIdTriangleContainsPoint(&triangles[numTotalTriangles/2], &puntoEnBorde, x, y);
-		continue;
-		// se buscará el triangulo t en cada triangulo[i] de la malla
-		for (i = 0; i < numTotalTriangles; i++) {
-			// se calcula los determinantes de cada lado del triangulo t su el nuevo punto
-			getDetsByTriangle(&triangles[i], dets, x, y);
-			// si punto cae en arista, se ordenan vértices enumerados como: el primer
-			// que comparte esa arista, el segundo y el que no (al que llamaremos opuesto)
-			// todo siempre en sentido contrarreloj
-			puntoEnBorde = 0;
-			// Caso en que el punto cae en el primer borde de t (es decir, entre arista 1 y 2)
-			if (dets[0] == 0 && dets[1] > 0 && dets[2] > 0) {
-				puntoEnBorde = 1;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 0;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 1;
-				idsVerticesTriangulo[VERTICE_OPUESTO] = 2;
+		currentTriangle = getIdTriangleContainsPoint(&triangles[numTotalTriangles/2], &puntoEnBorde, x, y);
+		// si punto cae en arista, se ordenan vértices enumerados como: el primer
+		// que comparte esa arista, el segundo y el que no (al que llamaremos opuesto)
+		// todo siempre en sentido contrarreloj
+		// Caso en que el punto cae en el primer borde de t (es decir, entre arista 1 y 2)
+		if (puntoEnBorde == 1) {
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 0;
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 1;
+			idsVerticesTriangulo[VERTICE_OPUESTO] = 2;
+		}
+		// Caso en que el punto cae en el segundo borde de t (es decir, entre arista 2 y 3)
+		else if (puntoEnBorde == 2) {
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 1;
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 2;
+			idsVerticesTriangulo[VERTICE_OPUESTO] = 0;
+		}
+		// Caso en que el punto cae en el tercer borde de t (es decir, entre arista 3 y 1)
+		else if (puntoEnBorde == 3) {
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 2;
+			idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 0;
+			idsVerticesTriangulo[VERTICE_OPUESTO] = 1;
+		}
+		// Caso en que el punto cae dentro del triángulo t
+		else if (puntoEnBorde == 0) {
+			/*
+			- Se crearán los triángulo n1, n2 y n3 dentro de t, con sus aristas y el nuevo vertice
+			- Se deben configurar la nueva vecindad dado n1, n2 y n3
+			- Los ex vecinos del difunto t, deben actualizarse respecto a n1, n2 y n3
+			- Se debe hacer el test del círculo entre:
+			- n1 y V3, donde V3 es el vecino opuesto al vértice 3 de t
+			- n2 y V1, donde V1 es el vecino opuesto al vértice 1 de t
+			- n3 y V2, donde V2 es el vecino opuesto al vértice 2 de t
+			*/
+			// guardo un respaldo del triagulo original t donde cae el nuevo punto
+			copyTriangle = *currentTriangle;
+			// se limpia el triangulo t que se reutilizará con el nuevo triángulo n1
+			clearTriangle(currentTriangle);
+			// se crea el nuevo vértice
+			vertices[numTotalVertices].x = x;
+			vertices[numTotalVertices].y = y;
+			// n1, referido como currentTriangle
+			currentTriangle->vertices[0] = copyTriangle.vertices[0];
+			currentTriangle->vertices[1] = copyTriangle.vertices[1];
+			currentTriangle->vertices[2] = &vertices[numTotalVertices];
+			// n2, referido, más adelante, como triangles[numTotalTriangles - 2]
+			triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
+			triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[1];
+			triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[2];
+			numTotalTriangles++;
+			//  n3, referido, más adelante, como triangles[numTotalTriangles - 1]
+			triangles[numTotalTriangles].vertices[0] = copyTriangle.vertices[0];
+			triangles[numTotalTriangles].vertices[1] = &vertices[numTotalVertices];
+			triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[2];
+			numTotalTriangles++;
+			// se actualizan los vecinos locales de n1:
+			// el vecino de n1, en su vertice 1, es n2
+			currentTriangle->next[0] = &triangles[numTotalTriangles - 2];
+			// el vecino de n1, en su vertice 2, es n3
+			currentTriangle->next[1] = &triangles[numTotalTriangles - 1];
+			// el vecino de n1, en su vertice 3, es el ex vecino de t en su vertice 2
+			currentTriangle->next[2] = copyTriangle.next[2];
+			// se actualizan los vecinos locales de n2
+			triangles[numTotalTriangles - 2].next[0] = copyTriangle.next[0];
+			triangles[numTotalTriangles - 2].next[1] = &triangles[numTotalTriangles - 1];
+			triangles[numTotalTriangles - 2].next[2] = currentTriangle;
+			// se actualizan los vecinos locales de n3
+			triangles[numTotalTriangles - 1].next[0] = &triangles[numTotalTriangles - 2];
+			triangles[numTotalTriangles - 1].next[1] = copyTriangle.next[1];
+			triangles[numTotalTriangles - 1].next[2] = currentTriangle;
+			// ¿tenia vecino V1 el difunto t frente al vertice 1?, o, en otras palabras,
+			// ¿hay vecino frente al vertice 1 de n2 que se requiera actualizar la referencia?
+			if (copyTriangle.next[0] != NULL) {
+				// se rescata id del vecino opuesto para actualizar referencia de vecino lejano
+				idVerticeOpuestoVecino = getThirdVertexId(
+					copyTriangle.next[0],
+					copyTriangle.vertices[1],
+					copyTriangle.vertices[2]);
+				// se actualiza la referencia del vecino respecto a nuevo triángulo n2
+				copyTriangle.next[0]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 2];
 			}
-			// Caso en que el punto cae en el segundo borde de t (es decir, entre arista 2 y 3)
-			else if (dets[0] > 0 && dets[1] == 0 && dets[2] > 0) {
-				puntoEnBorde = 1;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 1;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 2;
-				idsVerticesTriangulo[VERTICE_OPUESTO] = 0;
+			// ¿tenia vecino V2 el difunto t frente al vertice 2? (o frente a n3)
+			if (copyTriangle.next[1] != NULL) {
+				idVerticeOpuestoVecino = getThirdVertexId(
+					copyTriangle.next[1],
+					copyTriangle.vertices[2],
+					copyTriangle.vertices[0]);
+				copyTriangle.next[1]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
 			}
-			// Caso en que el punto cae en el tercer borde de t (es decir, entre arista 3 y 1)
-			else if (dets[0] > 0 && dets[1] > 0 && dets[2] == 0) {
-				puntoEnBorde = 1;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_1] = 2;
-				idsVerticesTriangulo[VERTICE_COMPARTIDO_2] = 0;
-				idsVerticesTriangulo[VERTICE_OPUESTO] = 1;
+			// ¿tenia vecino V3 el difunto t frente al vertice 3? (o frente a n1)
+			if (copyTriangle.next[2] != NULL) {
+				// idsVerticesVecino[0] es ahora vértice opuesto a la arista compartida entre n1 y V3
+				idVerticeOpuestoVecino = getThirdVertexId(
+					copyTriangle.next[2],
+					copyTriangle.vertices[0],
+					copyTriangle.vertices[1]);
+				// se actualiza referencia del vértice opuesto a la arista compartida en el vecino lejano V3
+				copyTriangle.next[2]->next[idVerticeOpuestoVecino] = currentTriangle;
 			}
-			// Caso en que el punto cae dentro del triángulo t
-			else if (dets[0] > 0 && dets[1] > 0 && dets[2] > 0) {
-				/*
-				 - Se crearán los triángulo n1, n2 y n3 dentro de t, con sus aristas y el nuevo vertice
-				 - Se deben configurar la nueva vecindad dado n1, n2 y n3
-				 - Los ex vecinos del difunto t, deben actualizarse respecto a n1, n2 y n3
-				 - Se debe hacer el test del círculo entre:
-					- n1 y V3, donde V3 es el vecino opuesto al vértice 3 de t
-					- n2 y V1, donde V1 es el vecino opuesto al vértice 1 de t
-					- n3 y V2, donde V2 es el vecino opuesto al vértice 2 de t
-				*/
-				// guardo un respaldo del triagulo original t donde cae el nuevo punto
-				copyTriangle = triangles[i];
-				// se limpia el triangulo t que se reutilizará con el nuevo triángulo n1
-				clearTriangle(&triangles[i]);
-				// se crea el nuevo vértice
-				vertices[numTotalVertices].x = x;
-				vertices[numTotalVertices].y = y;
-				// n1, referido como triangles[i]
-				triangles[i].vertices[0] = copyTriangle.vertices[0];
-				triangles[i].vertices[1] = copyTriangle.vertices[1];
-				triangles[i].vertices[2] = &vertices[numTotalVertices];
-				// n2, referido, más adelante, como triangles[numTotalTriangles - 2]
+			/*
+			*
+				Desde ahora en adelante *NO* se debiese usar copyTriangle
+			*
+			*/
+			/* si n1 tiene vecino al frente, debe testearse para el intercambio de diagonal */
+			if (currentTriangle->next[2] != NULL) {
+				idVerticeOpuestoVecino = getThirdVertexId(
+					currentTriangle->next[2],
+					currentTriangle->vertices[0],
+					currentTriangle->vertices[1]);
+				intercambioDeDiagonal(
+					currentTriangle,
+					currentTriangle->next[2], 0, 1, 2,
+					idVerticeOpuestoVecino, 0, 0);
+			}
+			/* si n2 tiene vecino al frente, debe testearse para intercambio de diagonal */
+			if (triangles[numTotalTriangles-2].next[0] != NULL) {
+				idVerticeOpuestoVecino = getThirdVertexId(
+					triangles[numTotalTriangles - 2].next[0],
+					triangles[numTotalTriangles - 2].vertices[1],
+					triangles[numTotalTriangles - 2].vertices[2]);
+				intercambioDeDiagonal(
+					&triangles[numTotalTriangles - 2],
+					triangles[numTotalTriangles - 2].next[0], 1, 2, 0,
+					idVerticeOpuestoVecino, 0, 0);
+			}
+			/* si n3 tiene vecino al frente, debe testearse para el intercambio de diagonal */
+			if (triangles[numTotalTriangles - 1].next[1] != NULL) {
+				idVerticeOpuestoVecino = getThirdVertexId(
+					triangles[numTotalTriangles - 1].next[1],
+					triangles[numTotalTriangles - 1].vertices[2],
+					triangles[numTotalTriangles - 1].vertices[0]);
+				intercambioDeDiagonal(
+					&triangles[numTotalTriangles - 1],
+					triangles[numTotalTriangles - 1].next[1], 2, 0, 1,
+					idVerticeOpuestoVecino, 0, 0);
+			}
+			numTotalVertices++;
+			continue;
+		}
+		// Caso en que el nuevo punto leído cae en un vértice del triángulo t
+		if (puntoEnBorde > 0) {
+			// se carga nuevo vertice a la malla
+			vertices[numTotalVertices].x = x;
+			vertices[numTotalVertices].y = y;
+			// se saca una copia de respaldo del triangulo t
+			// porque morirá pronto...
+			copyTriangle = *currentTriangle;
+			// muere t, quien se transformará en el nuevo n1
+			clearTriangle(currentTriangle);
+			// ¿tenía el difunto triangulo t tenía un vecino en el vértice
+			// opuesto a la arista donde cae el nuevo punto?
+			// (y por ende, ¿vecino de t con el que comparte la arista donde cae el punto?)
+			if (copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]] != NULL) {
+				// se saca una copia de respaldo del vecino con el que comparte artista donde cae el punto
+				copyNext = *copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				// muere vecino de la arista compartida donde cae el punto
+				clearTriangle(copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]);
+				// se arma set de indices del vecino, asegurándose que se conserve el ordenamiento contrarreloj
+				idsVerticesVecino[VERTICE_COMPARTIDO_1] = getVertexIdByVertex(
+					&copyNext,
+					copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]);
+				idsVerticesVecino[VERTICE_COMPARTIDO_2] = getVertexIdByVertex(
+					&copyNext,
+					copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]);
+				idsVerticesVecino[VERTICE_OPUESTO] = getThirdVertexId(
+					&copyNext,
+					copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
+					copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]);
+				// se crea nuevo triángulo n1
+				currentTriangle->vertices[0] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
+				currentTriangle->vertices[1] = &vertices[numTotalVertices];
+				currentTriangle->vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				// se crea nuevo triángulo n2
 				triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
-				triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[1];
-				triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[2];
+				triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
+				triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
 				numTotalTriangles++;
-				//  n3, referido, más adelante, como triangles[numTotalTriangles - 1]
-				triangles[numTotalTriangles].vertices[0] = copyTriangle.vertices[0];
-				triangles[numTotalTriangles].vertices[1] = &vertices[numTotalVertices];
-				triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[2];
+				// se crea nuevo triángulo n3
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[0] =
+					&vertices[numTotalVertices];
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[1] =
+					copyNext.vertices[idsVerticesVecino[VERTICE_COMPARTIDO_2]];
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2] =
+					copyNext.vertices[idsVerticesVecino[VERTICE_OPUESTO]];
+				// se crea nuevo triángulo n4
+				triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
+				triangles[numTotalTriangles].vertices[1] = copyNext.vertices[idsVerticesVecino[VERTICE_OPUESTO]];
+				triangles[numTotalTriangles].vertices[2] = copyNext.vertices[idsVerticesVecino[VERTICE_COMPARTIDO_1]];
 				numTotalTriangles++;
-				// se actualizan los vecinos locales de n1:
-				// el vecino de n1, en su vertice 1, es n2
-				triangles[i].next[0] = &triangles[numTotalTriangles - 2];
-				// el vecino de n1, en su vertice 2, es n3
-				triangles[i].next[1] = &triangles[numTotalTriangles - 1];
-				// el vecino de n1, en su vertice 3, es el ex vecino de t en su vertice 2
-				triangles[i].next[2] = copyTriangle.next[2];
-				// se actualizan los vecinos locales de n2
-				triangles[numTotalTriangles - 2].next[0] = copyTriangle.next[0];
-				triangles[numTotalTriangles - 2].next[1] = &triangles[numTotalTriangles - 1];
-				triangles[numTotalTriangles - 2].next[2] = &triangles[i];
-				// se actualizan los vecinos locales de n3
-				triangles[numTotalTriangles - 1].next[0] = &triangles[numTotalTriangles - 2];
-				triangles[numTotalTriangles - 1].next[1] = copyTriangle.next[1];
-				triangles[numTotalTriangles - 1].next[2] = &triangles[i];
-				// ¿tenia vecino V1 el difunto t frente al vertice 1?, o, en otras palabras,
-				// ¿hay vecino frente al vertice 1 de n2 que se requiera actualizar la referencia?
-				if (copyTriangle.next[0] != NULL) {
-					// se rescata id del vecino opuesto para actualizar referencia de vecino lejano
+				// se actualiza el vecindario
+				// n2 pasa a ser vecino de n1 en su vertice 1 (n1 v0)
+				currentTriangle->next[0] = &triangles[numTotalTriangles - 2];
+				// el ex vecino de t en el vértice 2 pasa a ser vecino de n1 en su vertice 1
+				currentTriangle->next[1] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
+				// de existir, se actualiza el ex vecino de t en el vértice 2
+				if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[0],
-						copyTriangle.vertices[1],
-						copyTriangle.vertices[2]);
-					// se actualiza la referencia del vecino respecto a nuevo triángulo n2
-					copyTriangle.next[0]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 2];
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
+						currentTriangle->vertices[0],
+						currentTriangle->vertices[2]);
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = currentTriangle;
 				}
-				// ¿tenia vecino V2 el difunto t frente al vertice 2? (o frente a n3)
-				if (copyTriangle.next[1] != NULL) {
+				// n3 pasa a ser el vecino de n1 en el vertice 3
+				currentTriangle->next[2] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				// el ex vecino de t en el vértice 1 pasa a ser vecino de n2 en su vertice 0
+				triangles[numTotalTriangles - 2].next[0] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
+				// de existir, se actualiza el ex vecino de t en el vértice 1
+				if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[1],
-						copyTriangle.vertices[2],
-						copyTriangle.vertices[0]);
-					copyTriangle.next[1]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
+						triangles[numTotalTriangles - 2].vertices[1],
+						triangles[numTotalTriangles - 2].vertices[2]);
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] =
+						&triangles[numTotalTriangles - 2];
 				}
-				// ¿tenia vecino V3 el difunto t frente al vertice 3? (o frente a n1)
-				if (copyTriangle.next[2] != NULL) {
-					// idsVerticesVecino[0] es ahora vértice opuesto a la arista compartida entre n1 y V3
+				// n1 pasa a ser vecino de n2 en su vertice 2
+				triangles[numTotalTriangles - 2].next[1] = currentTriangle;
+				// n4 pasa a ser vecino de n2 en su vertice 3
+				triangles[numTotalTriangles - 2].next[2] = &triangles[numTotalTriangles - 1];
+				// falta actualizar vecindad de n3
+				// el ex vecino de copyNext en el vertice compartido 1 pasa a ser el vecino de n3 en su vertice 0
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[0] = copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]];
+				// de existir, se actualiza el ex vecino de copyNext
+				if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[2],
-						copyTriangle.vertices[0],
-						copyTriangle.vertices[1]);
-					// se actualiza referencia del vértice opuesto a la arista compartida en el vecino lejano V3
-					copyTriangle.next[2]->next[idVerticeOpuestoVecino] = &triangles[i];
+						copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]],
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[1],
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2]);
+					copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
 				}
-				if (copyTriangle.next[0] != NULL) {
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[1] = &triangles[numTotalTriangles - 1];
+				copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[2] = currentTriangle;
+				// vecindad de n4
+				triangles[numTotalTriangles - 1].next[0] = copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]];
+				// de existir, se actualiza el ex vecino de copyNext
+				if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[0],
-						copyTriangle.vertices[1],
-						copyTriangle.vertices[2]);
+						copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]],
+						triangles[numTotalTriangles - 1].vertices[1],
+						triangles[numTotalTriangles - 1].vertices[2]);
+					copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
+				}
+				// n2 pasa a ser vecino de n4 en el vertice 1
+				triangles[numTotalTriangles - 1].next[1] = &triangles[numTotalTriangles - 2];
+				triangles[numTotalTriangles - 1].next[2] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				/*
+				*
+					Desde ahora en adelante *NO* se debiese usar copyTriangle
+				*
+				*/
+				// ahora se realizan los test del circulo para cada n
+				// intercambio de diagonal para:
+				// n1
+				if (currentTriangle->next[1] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						currentTriangle->next[1],
+						currentTriangle->vertices[2],
+						currentTriangle->vertices[0]);
+					intercambioDeDiagonal(
+						currentTriangle,
+						currentTriangle->next[1], 2, 0, 1,
+						idVerticeOpuestoVecino, 0, 0);
+				}
+				// n2
+				if (triangles[numTotalTriangles-2].next[0] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						triangles[numTotalTriangles - 2].next[0],
+						triangles[numTotalTriangles - 2].vertices[1],
+						triangles[numTotalTriangles - 2].vertices[2]);
 					intercambioDeDiagonal(
 						&triangles[numTotalTriangles - 2],
-						copyTriangle.next[0], 1, 2, 0,
-						idVerticeOpuestoVecino, 0);
+						triangles[numTotalTriangles - 2].next[0], 1, 2, 0,
+						idVerticeOpuestoVecino, 0, 0);
 				}
-				if (copyTriangle.next[1] != NULL) {
+				// n3
+				if (currentTriangle->next[2]->next[0] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[1],
-						copyTriangle.vertices[2],
-						copyTriangle.vertices[0]);
+						currentTriangle->next[2]->next[0],
+						currentTriangle->next[2]->vertices[1],
+						currentTriangle->next[2]->vertices[2]);
+					intercambioDeDiagonal(
+						currentTriangle->next[2],
+						currentTriangle->next[2]->next[0], 1, 2, 0,
+						idVerticeOpuestoVecino, 0, 0);
+				}
+				// n4
+				if (triangles[numTotalTriangles - 1].next[0] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						triangles[numTotalTriangles - 1].next[0],
+						triangles[numTotalTriangles - 1].vertices[1],
+						triangles[numTotalTriangles - 1].vertices[2]);
 					intercambioDeDiagonal(
 						&triangles[numTotalTriangles - 1],
-						copyTriangle.next[1], 2, 0, 1,
-						idVerticeOpuestoVecino, 0);
+						triangles[numTotalTriangles - 1].next[0], 1, 2, 0,
+						idVerticeOpuestoVecino, 0, 0);
 				}
-				if (copyTriangle.next[2] != NULL) {
-					// idsVerticesVecino[0] es ahora vértice opuesto a la arista compartida entre n1 y V3
+			}
+			// en el caso que t no comparta la arista donde cayó el nuevo punto con otro trinagulo...
+			// (en otras palabras, no tiene vecino en la arista donde cayó el nuevo punto...)
+			else {
+				// se crea el nuevo triángulo n1
+				currentTriangle->vertices[0] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
+				currentTriangle->vertices[1] = &vertices[numTotalVertices];
+				currentTriangle->vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				// se crea el nuevo triangulo n2
+				triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
+				triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
+				triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
+				numTotalTriangles++;
+				// se actualiza el vecindario
+				// n2 pasa a ser vecino de n1 en el vértice 1
+				currentTriangle->next[0] = &triangles[numTotalTriangles - 1];
+				// se actualiza el vecino lejano de n1
+				currentTriangle->next[1] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
+				if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
 					idVerticeOpuestoVecino = getThirdVertexId(
-						copyTriangle.next[2],
-						copyTriangle.vertices[0],
-						copyTriangle.vertices[1]);
-					intercambioDeDiagonal(
-						&triangles[i],
-						copyTriangle.next[2], 0, 1, 2,
-						idVerticeOpuestoVecino, 0);
-				}
-				numTotalVertices++;
-				break;
-			}
-			// Caso en que el nuevo punto leído cae en un vértice del triángulo t
-			if (puntoEnBorde == 1) {
-				// se carga nuevo vertice a la malla
-				vertices[numTotalVertices].x = x;
-				vertices[numTotalVertices].y = y;
-				// se saca una copia de respaldo del triangulo t
-				// porque morirá pronto...
-				copyTriangle = triangles[i];
-				// muere t, quien se transformará en el nuevo n1
-				clearTriangle(&triangles[i]);
-				// ¿tenía el difunto triangulo t tenía un vecino en el vértice
-				// opuesto a la arista donde cae el nuevo punto?
-				// (y por ende, ¿vecino de t con el que comparte la arista donde cae el punto?)
-				if (copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]] != NULL) {
-					// se saca una copia de respaldo del vecino con el que comparte artista donde cae el punto
-					copyNext = *copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					// muere vecino de la arista compartida donde cae el punto
-					clearTriangle(copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]);
-					// se arma set de indices del vecino, asegurándose que se conserve el ordenamiento contrarreloj
-					idsVerticesVecino[VERTICE_COMPARTIDO_1] = getVertexIdByVertex(
-						&copyNext,
-						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]);
-					idsVerticesVecino[VERTICE_COMPARTIDO_2] = getVertexIdByVertex(
-						&copyNext,
-						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]);
-					idsVerticesVecino[VERTICE_OPUESTO] = getThirdVertexId(
-						&copyNext,
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
 						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]);
-					// se crea nuevo triángulo n1
-					triangles[i].vertices[0] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
-					triangles[i].vertices[1] = &vertices[numTotalVertices];
-					triangles[i].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					// se crea nuevo triángulo n2
-					triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
-					triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
-					triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					numTotalTriangles++;
-					// se crea nuevo triángulo n3
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[0] =
-						&vertices[numTotalVertices];
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[1] =
-						copyNext.vertices[idsVerticesVecino[VERTICE_COMPARTIDO_2]];
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2] =
-						copyNext.vertices[idsVerticesVecino[VERTICE_OPUESTO]];
-					// se crea nuevo triángulo n4
-					triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
-					triangles[numTotalTriangles].vertices[1] = copyNext.vertices[idsVerticesVecino[VERTICE_OPUESTO]];
-					triangles[numTotalTriangles].vertices[2] = copyNext.vertices[idsVerticesVecino[VERTICE_COMPARTIDO_1]];
-					numTotalTriangles++;
-					// se actualiza el vecindario
-					// n2 pasa a ser vecino de n1 en su vertice 1 (n1 v0)
-					triangles[i].next[0] = &triangles[numTotalTriangles - 2];
-					// el ex vecino de t en el vértice 2 pasa a ser vecino de n1 en su vertice 1
-					triangles[i].next[1] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
-					// de existir, se actualiza el ex vecino de t en el vértice 2
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							triangles[i].vertices[0],
-							triangles[i].vertices[2]);
-						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] =
-							&triangles[i];
-					}
-					// n3 pasa a ser el vecino de n1 en el vertice 3
-					triangles[i].next[2] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					// el ex vecino de t en el vértice 1 pasa a ser vecino de n2 en su vertice 0
-					triangles[numTotalTriangles - 2].next[0] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
-					// de existir, se actualiza el ex vecino de t en el vértice 1
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							triangles[numTotalTriangles - 2].vertices[1],
-							triangles[numTotalTriangles - 2].vertices[2]);
-						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] =
-							&triangles[numTotalTriangles - 2];
-					}
-					// n1 pasa a ser vecino de n2 en su vertice 2
-					triangles[numTotalTriangles - 2].next[1] = &triangles[i];
-					// n4 pasa a ser vecino de n2 en su vertice 3
-					triangles[numTotalTriangles - 2].next[2] = &triangles[numTotalTriangles - 1];
-					// falta actualizar vecindad de n3
-					// el ex vecino de copyNext en el vertice compartido 1 pasa a ser el vecino de n3 en su vertice 0
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[0] = copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]];
-					// de existir, se actualiza el ex vecino de copyNext
-					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[1],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2]);
-						copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					}
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[1] = &triangles[numTotalTriangles - 1];
-					copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->next[2] = &triangles[i];
-					// vecindad de n4
-					triangles[numTotalTriangles - 1].next[0] = copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]];
-					// de existir, se actualiza el ex vecino de copyNext
-					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]],
-							triangles[numTotalTriangles - 1].vertices[1],
-							triangles[numTotalTriangles - 1].vertices[2]);
-						copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
-					}
-					// n2 pasa a ser vecino de n4 en el vertice 1
-					triangles[numTotalTriangles - 1].next[1] = &triangles[numTotalTriangles - 2];
-					triangles[numTotalTriangles - 1].next[2] = copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					// ahora se realizan los test del circulo para cada n
-					// intercambio de diagonal para:
-					// n1
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							triangles[i].vertices[0],
-							triangles[i].vertices[2]);
-						intercambioDeDiagonal(
-							&triangles[i],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]], 2, 0, 1,
-							idVerticeOpuestoVecino, 0);
-					}
-					// n2
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							triangles[numTotalTriangles - 2].vertices[1],
-							triangles[numTotalTriangles - 2].vertices[2]);
-						intercambioDeDiagonal(
-							&triangles[numTotalTriangles - 2],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino, 0);
-					}
-					// n3
-					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[1],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]]->vertices[2]);
-						intercambioDeDiagonal(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_OPUESTO]],
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino, 0);
-					}
-					// n4
-					if (copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]],
-							triangles[numTotalTriangles - 1].vertices[1],
-							triangles[numTotalTriangles - 1].vertices[2]);
-						intercambioDeDiagonal(
-							&triangles[numTotalTriangles - 1],
-							copyNext.next[idsVerticesVecino[VERTICE_COMPARTIDO_2]], 1, 2, 0,
-							idVerticeOpuestoVecino, 0);
-					}
+						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = currentTriangle;
 				}
-				// en el caso que t no comparta la arista donde cayó el nuevo punto con otro trinagulo...
-				// (en otras palabras, no tiene vecino en la arista donde cayó el nuevo punto...)
-				else {
-					// se crea el nuevo triángulo n1
-					triangles[i].vertices[0] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
-					triangles[i].vertices[1] = &vertices[numTotalVertices];
-					triangles[i].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					// se crea el nuevo triangulo n2
-					triangles[numTotalTriangles].vertices[0] = &vertices[numTotalVertices];
-					triangles[numTotalTriangles].vertices[1] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
-					triangles[numTotalTriangles].vertices[2] = copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]];
-					numTotalTriangles++;
-					// se actualiza el vecindario
-					// n2 pasa a ser vecino de n1 en el vértice 1
-					triangles[i].next[0] = &triangles[numTotalTriangles - 1];
-					// se actualiza el vecino lejano de n1
-					triangles[i].next[1] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]];
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
-						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]]->next[idVerticeOpuestoVecino] = &triangles[i];
-					}
-					triangles[i].next[2] = NULL;
-					// se actualiza vertice 1 de n2
-					triangles[numTotalTriangles - 1].next[0] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
-						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
-					}
-					// n1 pasa a ser vecino de n2 en el vértice 2
-					triangles[numTotalTriangles - 1].next[1] = &triangles[i];
-					triangles[numTotalTriangles - 1].next[2] = NULL;
-					// intercambio de diagonal para n1, si es que tiene vecino al frente de su vertice 2
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
-						intercambioDeDiagonal(
-							&triangles[i],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]], 2, 0, 1,
-							idVerticeOpuestoVecino, 0);
-					}
-					// intercambio de diagonal para n2
-					if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
-						idVerticeOpuestoVecino = getThirdVertexId(
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
-							copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
-						intercambioDeDiagonal(
-							&triangles[numTotalTriangles - 1],
-							copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]], 1, 2, 0,
-							idVerticeOpuestoVecino, 0);
-					}
+				currentTriangle->next[2] = NULL;
+				// se actualiza vertice 1 de n2
+				triangles[numTotalTriangles - 1].next[0] = copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]];
+				if (copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]],
+						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_COMPARTIDO_2]],
+						copyTriangle.vertices[idsVerticesTriangulo[VERTICE_OPUESTO]]);
+					copyTriangle.next[idsVerticesTriangulo[VERTICE_COMPARTIDO_1]]->next[idVerticeOpuestoVecino] = &triangles[numTotalTriangles - 1];
 				}
-				numTotalVertices++;
+				// n1 pasa a ser vecino de n2 en el vértice 2
+				triangles[numTotalTriangles - 1].next[1] = currentTriangle;
+				triangles[numTotalTriangles - 1].next[2] = NULL;
+				// intercambio de diagonal para n1, si es que tiene vecino al frente de su vertice 2
+				if (currentTriangle->next[1] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						currentTriangle->next[1],
+						currentTriangle->vertices[2],
+						currentTriangle->vertices[0]);
+					intercambioDeDiagonal(
+						currentTriangle,
+						currentTriangle->next[1], 2, 0, 1,
+						idVerticeOpuestoVecino, 0, 0);
+				}
+				// intercambio de diagonal para n2
+				if (triangles[numTotalTriangles-1].next[0] != NULL) {
+					idVerticeOpuestoVecino = getThirdVertexId(
+						triangles[numTotalTriangles - 1].next[0],
+						triangles[numTotalTriangles - 1].vertices[1],
+						triangles[numTotalTriangles - 1].vertices[2]);
+					intercambioDeDiagonal(
+						&triangles[numTotalTriangles - 1],
+						triangles[numTotalTriangles - 1].next[0], 1, 2, 0,
+						idVerticeOpuestoVecino, 0, 0);
+				}
 			}
+			numTotalVertices++;
 		}
 	}
 	fclose(fpInput);
@@ -743,10 +805,13 @@ int restrictDelaunayNet(char* strFileInput, Triangle* triangles, int numTotalTri
 		numTotalSegments = 0,
 		// se usa como buleano para determinar si el punto cae en borde o dentro de un
 		// triángulo
-		constraintFound;
+		constraintFound,
+		segmentoExiste,
+		done;
 	// xs e ys es la recta a restringir
-	float x1, y1, x2, y2, detsA[3], detsB[3];
-	Triangle copyTriangle, copyNext;
+	float x1, y1, x2, y2, detsA[3], detsB[3] = { -1, -1, -1 },
+		detArista1, detArista2;
+	Triangle *currentTriangle, copyTriangle, copyNext;
 
 	fpInput = fopen(strFileInput, "r");
 	if (!fpInput) {
@@ -755,60 +820,130 @@ int restrictDelaunayNet(char* strFileInput, Triangle* triangles, int numTotalTri
 	}
 	while (!feof(fpInput)) {
 		fscanf(fpInput, "%f %f %f %f", &x1, &y1, &x2, &y2);
-		constraints[numTotalSegments].v1.x = x1;
-		constraints[numTotalSegments].v1.y = y1;
-		constraints[numTotalSegments].v2.x = x2;
-		constraints[numTotalSegments].v2.y = y2;
-		numTotalSegments++;
-		/*
-		puntoExiste = 0;
+		segmentoExiste = 0;
 		for (j = 0; j < numTotalSegments; j++) {
 			if (constraints[j].v1.x == x1 &&
 				constraints[j].v1.y == y1 &&
 				constraints[j].v2.x == x2 &&
 				constraints[j].v2.y == y2) {
-				puntoExiste = 1;
+				segmentoExiste = 1;
 			}
 		}
-		if (puntoExiste == 1) continue;
-		*/
+		if (segmentoExiste == 1) continue;
+		constraints[numTotalSegments].v1.x = x1;
+		constraints[numTotalSegments].v1.y = y1;
+		constraints[numTotalSegments].v2.x = x2;
+		constraints[numTotalSegments].v2.y = y2;
+		numTotalSegments++;
 		/* se busca el triangulo donde parte del segmento restringido */
-		for (i = 0; i < numTotalTriangles; i++) {
-			constraintFound = 0;
-			getDetsByTriangle(&triangles[i], detsA, x1, y1);
-			if (detsA[0] >= 0 && detsA[1] >= 0 && detsA[2] >= 0) {
-				getDetsByTriangle(&triangles[i], detsB, x2, y2);
-				if (detsA[0] > 0 && detsA[1] == 0 && detsA[2] == 0 && detsB[0] < 0 && detsB[1] > 0 && detsB[2] > 0) {
-					constraintFound = 1;
-					idsVerticesTriangulo[0] = 2;
-					idsVerticesTriangulo[1] = 0;
-					idsVerticesTriangulo[2] = 1;
+		done = 0;
+		while (done == 0) {
+			for (i = 0; i < numTotalTriangles; i++) {
+				constraintFound = 0;
+				currentTriangle = &triangles[i];
+				getDetsByTriangle(currentTriangle, detsA, x1, y1);
+				if (detsA[0] >= 0 && detsA[1] >= 0 && detsA[2] >= 0) {
+					getDetsByTriangle(currentTriangle, detsB, x2, y2);
+					if (detsB[0] >= 0 && detsB[1] >= 0 && detsB[2] >= 0) {
+						done = 1;
+						break;
+					}
+					/* donde idsVerticesTriangulo[0] = 0 será el vértice opuesto
+					al prox vecino del fin del segmento restringido */
+					if (detsA[0] > 0 && detsA[1] == 0 && detsA[2] == 0 &&
+						detsB[0] < 0 && detsB[1] >= 0 && detsB[2] >= 0) {
+						constraintFound = 1;
+						idsVerticesTriangulo[0] = 2;
+						idsVerticesTriangulo[1] = 0;
+						idsVerticesTriangulo[2] = 1;
+					}
+					else if (
+						detsA[0] == 0 && detsA[1] == 0 && detsA[2] > 0 &&
+						detsB[0] >= 0 && detsB[1] >= 0 && detsB[2] < 0) {
+						constraintFound = 1;
+						idsVerticesTriangulo[0] = 1;
+						idsVerticesTriangulo[1] = 2;
+						idsVerticesTriangulo[2] = 0;
+					}
+					else if (
+						detsA[0] == 0 && detsA[1] > 0 && detsA[2] == 0 &&
+						detsB[0] >= 0 && detsB[1] < 0 && detsB[2] >= 0) {
+						constraintFound = 1;
+						idsVerticesTriangulo[0] = 0;
+						idsVerticesTriangulo[1] = 1;
+						idsVerticesTriangulo[2] = 2;
+					}
+					if (constraintFound == 1) {
+						/* caso en que arista restringida sea colinear con arista de currentTriangle */
+						if (detsB[idsVerticesTriangulo[0]] == 0) {
+							x1 = currentTriangle->vertices[idsVerticesTriangulo[1]]->x;
+							y1 = currentTriangle->vertices[idsVerticesTriangulo[1]]->y;
+							break;
+						}
+						else if (detsB[idsVerticesTriangulo[2]] == 0) {
+							x1 = currentTriangle->vertices[idsVerticesTriangulo[2]]->x;
+							y1 = currentTriangle->vertices[idsVerticesTriangulo[2]]->y;
+							break;
+						}
+						idVerticeOpuestoVecino = getThirdVertexId(
+							currentTriangle->next[idsVerticesTriangulo[0]],
+							currentTriangle->vertices[idsVerticesTriangulo[1]],
+							currentTriangle->vertices[idsVerticesTriangulo[2]]);
+						/*
+						hacer el test orientacion entre las aristas que no es la que comparte con el prox triangulo y
+						triangles[i].next[idsVerticesTriangulo[0]]
+						*/
+						detArista1 = getDetBySegments(
+							currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
+							currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
+							currentTriangle->vertices[idsVerticesTriangulo[1]]->x,
+							currentTriangle->vertices[idsVerticesTriangulo[1]]->y,
+							currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
+							currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
+						detArista2 = getDetBySegments(
+							currentTriangle->vertices[idsVerticesTriangulo[2]]->x,
+							currentTriangle->vertices[idsVerticesTriangulo[2]]->y,
+							currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
+							currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
+							currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
+							currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
+						if (detArista1 > 0 && detArista2 > 0)
+							intercambioDeDiagonal(currentTriangle, currentTriangle->next[idsVerticesTriangulo[0]],
+								idsVerticesTriangulo[1], idsVerticesTriangulo[2], idsVerticesTriangulo[0], idVerticeOpuestoVecino, 1, 1);
+						else if (detArista1 < 0) {
+							/*
+							intercambioDeDiagonal(
+								currentTriangle->next[idsVerticesTriangulo[0]],
+								currentTriangle->next[idsVerticesTriangulo[0]]->next[
+									getVertexIdByVertex(
+										currentTriangle->next[idsVerticesTriangulo[0]],
+										currentTriangle->vertices[idsVerticesTriangulo[2]])
+								],
+								getVertexIdByVertex(currentTriangle->next[idsVerticesTriangulo[0]], currentTriangle->vertices[idsVerticesTriangulo[1]]),
+								getThirdVertex(currentTriangle->next[idsVerticesTriangulo[0]],
+									currentTriangle->vertices[idsVerticesTriangulo[1]],
+									currentTriangle->vertices[idsVerticesTriangulo[2]]),
+								getVertexIdByVertex(currentTriangle->next[idsVerticesTriangulo[0]], currentTriangle->vertices[idsVerticesTriangulo[2]]),
+								getThirdVertex(
+									currentTriangle->next[idsVerticesTriangulo[0]]->next[
+										getVertexIdByVertex(
+											currentTriangle->next[idsVerticesTriangulo[0]],
+											currentTriangle->vertices[idsVerticesTriangulo[2]])],
+										getVertexIdByVertex(currentTriangle->next[idsVerticesTriangulo[0]], currentTriangle->vertices[idsVerticesTriangulo[2]]),
+										getThirdVertex(
+												currentTriangle->next[idsVerticesTriangulo[0]],
+												currentTriangle->vertices[idsVerticesTriangulo[1]],
+												currentTriangle->vertices[idsVerticesTriangulo[2]])
+								),
+								1, 1
+							);
+							*/
+						}
+						else if (detArista2 < 0) {
+							
+						}
+					}
 				}
-				else if (detsA[0] == 0 && detsA[1] == 0 && detsA[2] > 0 && detsB[0] > 0 && detsB[1] > 0 && detsB[2] < 0) {
-					constraintFound = 1;
-					idsVerticesTriangulo[0] = 1;
-					idsVerticesTriangulo[1] = 2;
-					idsVerticesTriangulo[2] = 0;
-				}
-				else if (detsA[0] == 0 && detsA[1] > 0 && detsA[2] == 0 && detsB[0] > 0 && detsB[1] < 0 && detsB[2] > 0) {
-					constraintFound = 1;
-					idsVerticesTriangulo[0] = 0;
-					idsVerticesTriangulo[1] = 1;
-					idsVerticesTriangulo[2] = 2;
-				}
-				if (constraintFound == 1) {
-					idVerticeOpuestoVecino = getThirdVertexId(triangles[i].next[idsVerticesTriangulo[0]], triangles[i].vertices[idsVerticesTriangulo[1]], triangles[i].vertices[idsVerticesTriangulo[2]]);
-					intercambioDeDiagonal(&triangles[i], triangles[i].next[idsVerticesTriangulo[0]],
-						idsVerticesTriangulo[1], idsVerticesTriangulo[2], idsVerticesTriangulo[0], idVerticeOpuestoVecino, 1);
-				}
-				/*
-				printf("%.2f,%.2f %.2f,%.2f %.2f,%.2f:\n",
-					triangles[i].vertices[0]->x, triangles[i].vertices[0]->y,
-					triangles[i].vertices[1]->x, triangles[i].vertices[1]->y,
-					triangles[i].vertices[2]->x, triangles[i].vertices[2]->y);
-				printf("%.2f %.2f %.2f, ", detsA[0], detsA[1], detsA[2]);
-				printf("%.2f %.2f %.2f\n\n", detsB[0], detsB[1], detsB[2]);
-				*/
 			}
 		}
 	}
