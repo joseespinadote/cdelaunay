@@ -1,10 +1,15 @@
-#pragma once
+/* Código original del cálculo de determinante viene de
+ * https://github.com/david-wis/Determinant
+ */
+
 /*
  * matrix_helpers.h
  *
  *  Created on: Jan 3, 2020
  *      Author: Trotsky
  */
+
+#pragma once
 
 #ifndef DET_H
 #define DET_H

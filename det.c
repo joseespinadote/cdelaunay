@@ -1,3 +1,7 @@
+/* Código original del cálculo de determinante viene de
+ * https://github.com/david-wis/Determinant
+ */
+
 /*
  * matrix_helpers.c
  *

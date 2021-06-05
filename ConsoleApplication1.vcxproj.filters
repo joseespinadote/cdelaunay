@@ -21,6 +21,9 @@
     <ClCompile Include="main.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
+    <ClCompile Include="delaunay.c">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="puntos.txt" />
@@ -29,6 +32,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="det.h">
+      <Filter>Archivos de encabezado</Filter>
+    </ClInclude>
+    <ClInclude Include="delaunay.h">
       <Filter>Archivos de encabezado</Filter>
     </ClInclude>
   </ItemGroup>

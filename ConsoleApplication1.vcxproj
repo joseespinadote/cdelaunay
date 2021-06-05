@@ -152,6 +152,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="delaunay.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="det.c">
       <DeploymentContent>false</DeploymentContent>
@@ -163,6 +164,7 @@
     <Text Include="salida.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="delaunay.h" />
     <ClInclude Include="det.h" />
   </ItemGroup>
   <ItemGroup>
