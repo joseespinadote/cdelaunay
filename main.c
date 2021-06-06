@@ -14,7 +14,8 @@
 int main(int argc, char* argv[]) {
 	int *numTotalTriangles,
 		*numTotalVertices,
-		*numTotalSegments;
+		*numTotalSegments,
+		clearMode = 1;
 	char fileInput[BUFFER_SIZE],
 		fileOutput[BUFFER_SIZE],
 		fileInputRestrict[BUFFER_SIZE];
@@ -42,8 +43,7 @@ int main(int argc, char* argv[]) {
 	else {
 		loadConstraintFromFile(fileInputRestrict, constraints, numTotalSegments);
 	}
-	restrictDelaunayNet(triangles, vertices, constraints, numTotalTriangles, numTotalVertices, numTotalSegments);
+	restrictDelaunayNet(triangles, vertices, constraints, numTotalTriangles, numTotalVertices, numTotalSegments, clearMode);
 	exportData(triangles, *numTotalTriangles, fileOutput);
-	//exportDataRestricted(constraints, *numTotalSegments, fileOutput);
 	return 0;
 }

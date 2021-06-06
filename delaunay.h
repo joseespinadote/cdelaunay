@@ -4,8 +4,8 @@
 #define MAX_VERTICES 3000
 #define MAX_TRIANGLES 6000
 #define MAX_SEGMENTS 1000
-#define TAMANO_MALLA_X 24
-#define TAMANO_MALLA_Y 24
+#define TAMANO_MALLA_X 100
+#define TAMANO_MALLA_Y 100
 #define BUFFER_SIZE 64
 #define VERTICE_COMPARTIDO_1 0
 #define VERTICE_COMPARTIDO_2 1
@@ -38,7 +38,7 @@ void clearTriangle(Triangle* triangle);
 int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest, int skipPropagation);
 int generateDelaunayNet(char* strFileInput, Triangle* triangles, Vertex* vertices, int* numTotalTriangles, int* numTotalVertices);
 float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp);
-void restrictDelaunayNet(Triangle* triangles, Vertex* vertices, Segment* constraints, int* numTotalTriangles, int* numTotalVertices, int* numTotalSegments);
+void restrictDelaunayNet(Triangle* triangles, Vertex* vertices, Segment* constraints, int* numTotalTriangles, int* numTotalVertices, int* numTotalSegments, int clearMode);
 Triangle* getIdTriangleContainsPoint(Triangle* triangle, int* puntoEnBorde, float x, float y);
 int isPointAlreadyOnNet(Vertex* vertices, int numTotalVertices, float x, float y);
 void removeTriangle(Triangle* triangle, Triangle* triangles, int *numTotalTriangles);
@@ -47,4 +47,5 @@ void applyConstraint(Triangle* triangles, int* numTotalTriangles, Segment* const
 void loadConstraintFromFile(char* strFileInput, Segment* constraints, int* numTotalSegments);
 void loadConstraintFromM2DFile(char* strFileInput, Segment* constraints, int* numTotalSegments);
 void clearPolygon(Triangle* triangles, int* numTotalTriangles, Segment* constraints, int* numTotalSegments);
+void intercambioDiagonalRestriccion(int* idsVerticesTriangulo, Triangle* currentTriangle);
 #endif

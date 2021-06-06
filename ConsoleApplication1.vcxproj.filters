@@ -44,5 +44,6 @@
       <Filter>Archivos de origen</Filter>
     </None>
     <None Include="script.gnuplot" />
+    <None Include="puntos.m2d" />
   </ItemGroup>
 </Project>

@@ -189,17 +189,17 @@ int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB,
 					Aop,
 					idVerticeVecinoLejano, 0, 0);
 			}
-			if (triangleB->next[Bop] != NULL) {
+			if (triangleB->next[Bvc1] != NULL) {
 				idVerticeVecinoLejano = getThirdVertexId(
-					triangleB->next[Bop],
-					triangleB->vertices[Bvc1],
-					triangleB->vertices[Bvc2]);
+					triangleB->next[Bvc1],
+					triangleB->vertices[Bvc2],
+					triangleB->vertices[Bop]);
 				intercambioDeDiagonal(
 					triangleB,
-					triangleB->next[Bop],
-					Bvc1,
+					triangleB->next[Bvc1],
 					Bvc2,
 					Bop,
+					Bvc1,
 					idVerticeVecinoLejano, 0, 0);
 			}
 		}
@@ -707,6 +707,55 @@ int generateDelaunayNet(char* strFileInput, Triangle* triangles, Vertex* vertice
 	return *numTotalTriangles;
 }
 
+void intercambioDiagonalRestriccion(int *idsVerticesTriangulo, Triangle *currentTriangle) {
+	float detArista1, detArista2;
+	int idVerticeOpuestoVecino;
+	Triangle oldTriangle;
+
+	idVerticeOpuestoVecino = getThirdVertexId(
+		currentTriangle->next[idsVerticesTriangulo[0]],
+		currentTriangle->vertices[idsVerticesTriangulo[1]],
+		currentTriangle->vertices[idsVerticesTriangulo[2]]);
+	/*
+	hacer el test orientacion entre las aristas que no es la que comparte con el prox triangulo y
+	triangles[i].next[idsVerticesTriangulo[0]]
+	*/
+	detArista1 = getDetBySegments(
+		currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
+		currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
+		currentTriangle->vertices[idsVerticesTriangulo[1]]->x,
+		currentTriangle->vertices[idsVerticesTriangulo[1]]->y,
+		currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
+		currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
+	detArista2 = getDetBySegments(
+		currentTriangle->vertices[idsVerticesTriangulo[2]]->x,
+		currentTriangle->vertices[idsVerticesTriangulo[2]]->y,
+		currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
+		currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
+		currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
+		currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
+	if (detArista1 > 0 && detArista2 > 0) {
+		intercambioDeDiagonal(currentTriangle, currentTriangle->next[idsVerticesTriangulo[0]],
+			idsVerticesTriangulo[1], idsVerticesTriangulo[2], idsVerticesTriangulo[0], idVerticeOpuestoVecino, 1, 1);
+	}
+	else if (detArista1 <= 0) {
+		oldTriangle = *currentTriangle;
+		currentTriangle = currentTriangle->next[idsVerticesTriangulo[0]];
+		idsVerticesTriangulo[0] = getVertexIdByVertex(currentTriangle, oldTriangle.vertices[idsVerticesTriangulo[1]]);
+		idsVerticesTriangulo[1] = idVerticeOpuestoVecino;
+		idsVerticesTriangulo[2] = getVertexIdByVertex(currentTriangle, oldTriangle.vertices[idsVerticesTriangulo[2]]);
+		intercambioDiagonalRestriccion(idsVerticesTriangulo, currentTriangle);
+	}
+	else if (detArista2 <= 0) {
+		oldTriangle = *currentTriangle;
+		currentTriangle = currentTriangle->next[idsVerticesTriangulo[0]];
+		idsVerticesTriangulo[0] = getVertexIdByVertex(currentTriangle, oldTriangle.vertices[idsVerticesTriangulo[2]]);
+		idsVerticesTriangulo[1] = getVertexIdByVertex(currentTriangle, oldTriangle.vertices[idsVerticesTriangulo[1]]);
+		idsVerticesTriangulo[2] = idVerticeOpuestoVecino;
+		intercambioDiagonalRestriccion(idsVerticesTriangulo, currentTriangle);
+	}
+}
+
 void applyConstraint(Triangle* triangles, int *numTotalTriangles, Segment *constraint) {
 	Triangle *currentTriangle, *oldTriangle;
 	float detsA[3] = { -1, -1, -1 },
@@ -757,86 +806,20 @@ void applyConstraint(Triangle* triangles, int *numTotalTriangles, Segment *const
 					idsVerticesTriangulo[2] = 2;
 				}
 				if (constraintFound == 1) {
-					/*
-					caso en que arista restringida sea colinear con arista de currentTriangle
-					*/
+					/* caso en que arista restringida sea colinear con arista 1 de currentTriangle */
 					if (detsB[idsVerticesTriangulo[0]] == 0) {
 						x1 = currentTriangle->vertices[idsVerticesTriangulo[1]]->x;
 						y1 = currentTriangle->vertices[idsVerticesTriangulo[1]]->y;
-						break;
 					}
+					/* caso en que arista restringida sea colinear con arista 2 de currentTriangle */
 					else if (detsB[idsVerticesTriangulo[2]] == 0) {
 						x1 = currentTriangle->vertices[idsVerticesTriangulo[2]]->x;
 						y1 = currentTriangle->vertices[idsVerticesTriangulo[2]]->y;
-						break;
 					}
-					idVerticeOpuestoVecino = getThirdVertexId(
-						currentTriangle->next[idsVerticesTriangulo[0]],
-						currentTriangle->vertices[idsVerticesTriangulo[1]],
-						currentTriangle->vertices[idsVerticesTriangulo[2]]);
-					/*
-					hacer el test orientacion entre las aristas que no es la que comparte con el prox triangulo y
-					triangles[i].next[idsVerticesTriangulo[0]]
-					*/
-					detArista1 = getDetBySegments(
-						currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
-						currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
-						currentTriangle->vertices[idsVerticesTriangulo[1]]->x,
-						currentTriangle->vertices[idsVerticesTriangulo[1]]->y,
-						currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
-						currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
-					detArista2 = getDetBySegments(
-						currentTriangle->vertices[idsVerticesTriangulo[2]]->x,
-						currentTriangle->vertices[idsVerticesTriangulo[2]]->y,
-						currentTriangle->vertices[idsVerticesTriangulo[0]]->x,
-						currentTriangle->vertices[idsVerticesTriangulo[0]]->y,
-						currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->x,
-						currentTriangle->next[idsVerticesTriangulo[0]]->vertices[idVerticeOpuestoVecino]->y);
-					if (detArista1 > 0 && detArista2 > 0)
-						intercambioDeDiagonal(currentTriangle, currentTriangle->next[idsVerticesTriangulo[0]],
-							idsVerticesTriangulo[1], idsVerticesTriangulo[2], idsVerticesTriangulo[0], idVerticeOpuestoVecino, 1, 1);
-					else if (detArista1 <= 0) {
-						oldTriangle = currentTriangle;
-						currentTriangle = currentTriangle->next[idsVerticesTriangulo[0]];
-						idsVerticesTriangulo[0] = getVertexIdByVertex(currentTriangle, oldTriangle->vertices[idsVerticesTriangulo[1]]);
-						idsVerticesTriangulo[1] = idVerticeOpuestoVecino;
-						idsVerticesTriangulo[2] = getVertexIdByVertex(currentTriangle, oldTriangle->vertices[idsVerticesTriangulo[2]]);
-						idVerticeOpuestoVecino = getThirdVertexId(
-							currentTriangle->next[idsVerticesTriangulo[0]],
-							currentTriangle->vertices[idsVerticesTriangulo[1]],
-							currentTriangle->vertices[idsVerticesTriangulo[2]]);
-						intercambioDeDiagonal(
-							currentTriangle,
-							currentTriangle->next[idsVerticesTriangulo[0]],
-							idsVerticesTriangulo[1],
-							idsVerticesTriangulo[2],
-							idsVerticesTriangulo[0],
-							idVerticeOpuestoVecino,
-							1, 1
-						);
-						break;
+					else {
+						intercambioDiagonalRestriccion(idsVerticesTriangulo, currentTriangle);
 					}
-					else if (detArista2 <= 0) {
-						oldTriangle = currentTriangle;
-						currentTriangle = currentTriangle->next[idsVerticesTriangulo[0]];
-						idsVerticesTriangulo[0] = getVertexIdByVertex(currentTriangle, oldTriangle->vertices[idsVerticesTriangulo[2]]);
-						idsVerticesTriangulo[1] = getVertexIdByVertex(currentTriangle, oldTriangle->vertices[idsVerticesTriangulo[1]]);
-						idsVerticesTriangulo[2] = idVerticeOpuestoVecino;
-						idVerticeOpuestoVecino = getThirdVertexId(
-							currentTriangle->next[idsVerticesTriangulo[0]],
-							currentTriangle->vertices[idsVerticesTriangulo[1]],
-							currentTriangle->vertices[idsVerticesTriangulo[2]]);
-						intercambioDeDiagonal(
-							currentTriangle,
-							currentTriangle->next[idsVerticesTriangulo[0]],
-							idsVerticesTriangulo[1],
-							idsVerticesTriangulo[2],
-							idsVerticesTriangulo[0],
-							idVerticeOpuestoVecino,
-							1, 1
-						);
-						break;
-					}
+					i = 0;
 				}
 			}
 		}
@@ -847,7 +830,7 @@ void loadConstraintFromM2DFile(char* strFileInput, Segment* constraints, int* nu
 	FILE* fpInput;
 	char buffer[BUFFER_SIZE];
 	float x1, y1, x2, y2;
-	int i, numVertices=0, segmentoExiste,
+	int i, j, numVertices=0, segmentoExiste,
 		idsVerticesTrianglo[3] = { -1, -1, -1 };
 	Vertex vertices[BUFFER_SIZE];
 	
@@ -872,15 +855,25 @@ void loadConstraintFromM2DFile(char* strFileInput, Segment* constraints, int* nu
 						&idsVerticesTrianglo[0],
 						&idsVerticesTrianglo[1],
 						&idsVerticesTrianglo[2]);
-					constraints[*numTotalSegments].v1 = vertices[idsVerticesTrianglo[0] - 1];
-					constraints[*numTotalSegments].v2 = vertices[idsVerticesTrianglo[1] - 1];
-					(*numTotalSegments)++;
-					constraints[*numTotalSegments].v1 = vertices[idsVerticesTrianglo[1] - 1];
-					constraints[*numTotalSegments].v2 = vertices[idsVerticesTrianglo[2] - 1];
-					(*numTotalSegments)++;
-					constraints[*numTotalSegments].v1 = vertices[idsVerticesTrianglo[2] - 1];
-					constraints[*numTotalSegments].v2 = vertices[idsVerticesTrianglo[0] - 1];
-					(*numTotalSegments)++;
+					for (i = 0; i < 3; i++) {
+						segmentoExiste = 0;
+						for (j = 0; j < *numTotalSegments; j++) {
+							if (((constraints[j].v1.x == vertices[idsVerticesTrianglo[i] - 1].x) &&
+								(constraints[j].v1.y == vertices[idsVerticesTrianglo[i] - 1].y) &&
+								(constraints[j].v2.x == vertices[idsVerticesTrianglo[(i + 1) % 3] - 1].x) &&
+								(constraints[j].v2.y == vertices[idsVerticesTrianglo[(i + 1) % 3] - 1].y)) ||
+								((constraints[j].v2.x == vertices[idsVerticesTrianglo[i] - 1].x) &&
+								(constraints[j].v2.y == vertices[idsVerticesTrianglo[i] - 1].y) &&
+								(constraints[j].v1.x == vertices[idsVerticesTrianglo[(i + 1) % 3] - 1].x) &&
+								(constraints[j].v1.y == vertices[idsVerticesTrianglo[(i + 1) % 3] - 1].y)))
+								segmentoExiste = 1;
+						}
+						if (segmentoExiste == 0) {
+							constraints[*numTotalSegments].v1 = vertices[idsVerticesTrianglo[i] - 1];
+							constraints[*numTotalSegments].v2 = vertices[idsVerticesTrianglo[(i + 1) % 3] - 1];
+							(*numTotalSegments)++;
+						}
+					}
 			}
 		}
 	}
@@ -995,7 +988,8 @@ void restrictDelaunayNet(
 	Segment* constraints,
 	int* numTotalTriangles,
 	int* numTotalVertices,
-	int* numTotalSegments) {
+	int* numTotalSegments,
+	int clearMode) {
 	int i, j, k,
 		idConstraint,
 		/* idsVerticesTriangulo es un vector con los vertices ordenados contrarreloj
@@ -1023,14 +1017,13 @@ void restrictDelaunayNet(
 			constraints[0].v1.y == constraints[i].v2.y) {
 			polygon = 1;
 		}
-		if (i < 2) {
-			/* se añaden vértices de inicio y fin de segmento restringido a la malla */
-			addPointToMesh(triangles, vertices, numTotalTriangles, numTotalVertices, constraints[i].v1.x, constraints[i].v1.y);
-			addPointToMesh(triangles, vertices, numTotalTriangles, numTotalVertices, constraints[i].v2.x, constraints[i].v2.y);
-			/* se busca el triangulo donde parte del segmento restringido */
-			applyConstraint(triangles, numTotalTriangles, &constraints[i]);
-		}
-		if (polygon == 1 && 0) {
+		
+		/* se añaden vértices de inicio y fin de segmento restringido a la malla */
+		addPointToMesh(triangles, vertices, numTotalTriangles, numTotalVertices, constraints[i].v1.x, constraints[i].v1.y);
+		addPointToMesh(triangles, vertices, numTotalTriangles, numTotalVertices, constraints[i].v2.x, constraints[i].v2.y);
+		/* se busca el triangulo donde parte del segmento restringido */
+		applyConstraint(triangles, numTotalTriangles, &constraints[i]);
+		if (polygon == 1 && clearMode == 1) {
 			clearPolygon(triangles, numTotalTriangles, constraints, numTotalSegments);
 		}
 	}
