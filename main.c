@@ -37,9 +37,12 @@ int main(int argc, char* argv[]) {
 	initMesh(triangles, vertices, constraints);
 	generateDelaunayNet(fileInput, triangles, vertices, numTotalTriangles, numTotalVertices);
 	if (strstr(fileInputRestrict, "m2d") != NULL) {
-		return;
+		loadConstraintFromM2DFile(fileInputRestrict, constraints, numTotalSegments);
 	}
-	restrictDelaunayNet(fileInputRestrict, triangles, vertices, constraints, numTotalTriangles, numTotalVertices, numTotalSegments);
+	else {
+		loadConstraintFromFile(fileInputRestrict, constraints, numTotalSegments);
+	}
+	restrictDelaunayNet(triangles, vertices, constraints, numTotalTriangles, numTotalVertices, numTotalSegments);
 	exportData(triangles, *numTotalTriangles, fileOutput);
 	//exportDataRestricted(constraints, *numTotalSegments, fileOutput);
 	return 0;
