@@ -25,27 +25,52 @@ typedef struct Segment {
 	Vertex v1, v2;
 } Segment;
 
-void initMesh(Triangle* triangles, Vertex* vertices, Segment* constraints);
-void getDetsByTriangle(Triangle* triangle, float* dets, float x, float y);
-int getVertexIdByVertex(Triangle* triangle, Vertex* vertex);
-Vertex* getThirdVertex(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
-int getThirdVertexId(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
+void addPointToMesh(
+	Triangle* triangles,
+	Vertex* vertices,
+	int* numTotalTriangles,
+	int* numTotalVertices,
+	float x, float y);
+void applyConstraint(
+	Triangle* triangles,
+	int* numTotalTriangles,
+	Segment* constraint);
 float circleTest(Triangle* triangle, float x, float y);
 float circleTestByVertex(Triangle* triangle, Vertex* vertice);
+void clearPolygon(
+	Triangle* triangles,
+	int* numTotalTriangles,
+	Segment* constraints,
+	int* numTotalSegments);
+void clearTriangle(Triangle* triangle);
 void exportData(Triangle* triangles, int numTotalTriangles, char* fileOutput);
 void exportDataRestricted(Segment* constraints, int numTotalSegments, char* fileOutput);
-void clearTriangle(Triangle* triangle);
-int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest, int skipPropagation);
-int generateDelaunayNet(char* strFileInput, Triangle* triangles, Vertex* vertices, int* numTotalTriangles, int* numTotalVertices);
-float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp);
-void restrictDelaunayNet(Triangle* triangles, Vertex* vertices, Segment* constraints, int* numTotalTriangles, int* numTotalVertices, int* numTotalSegments, int clearMode);
 Triangle* getIdTriangleContainsPoint(Triangle* triangle, int* puntoEnBorde, float x, float y);
+void getDetsByTriangle(Triangle* triangle, float* dets, float x, float y);
+Vertex* getThirdVertex(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
+int getThirdVertexId(Triangle* triangle, Vertex* vertex1, Vertex* vertex2);
+int getVertexIdByVertex(Triangle* triangle, Vertex* vertex);
+int generateDelaunayNet(
+	char* strFileInput,
+	Triangle* triangles,
+	Vertex* vertices,
+	int* numTotalTriangles,
+	int* numTotalVertices);
+float getDetBySegments(float x1, float y1, float x2, float y2, float xp, float yp);
+void initMesh(Triangle* triangles, Vertex* vertices, Segment* constraints);
+void intercambioDiagonalRestriccion(int* idsVerticesTriangulo, Triangle* currentTriangle);
+int intercambioDeDiagonal(Triangle* triangleA, Triangle* triangleB, int Avc1, int Avc2, int Aop, int Bop, int skipCircleTest, int skipPropagation);
 int isPointAlreadyOnNet(Vertex* vertices, int numTotalVertices, float x, float y);
-void removeTriangle(Triangle* triangle, Triangle* triangles, int *numTotalTriangles);
-void removeIsland(Triangle* triangle);
-void applyConstraint(Triangle* triangles, int* numTotalTriangles, Segment* constraint);
 void loadConstraintFromFile(char* strFileInput, Segment* constraints, int* numTotalSegments);
 void loadConstraintFromM2DFile(char* strFileInput, Segment* constraints, int* numTotalSegments);
-void clearPolygon(Triangle* triangles, int* numTotalTriangles, Segment* constraints, int* numTotalSegments);
-void intercambioDiagonalRestriccion(int* idsVerticesTriangulo, Triangle* currentTriangle);
+void restrictDelaunayNet(
+	Triangle* triangles,
+	Vertex* vertices,
+	Segment* constraints,
+	int* numTotalTriangles,
+	int* numTotalVertices,
+	int* numTotalSegments,
+	int clearMode);
+void removeTriangle(Triangle* triangle, Triangle* triangles, int *numTotalTriangles);
+void removeIsland(Triangle* triangle);
 #endif
